@@ -23,11 +23,6 @@ docker compose -f deploy/postgres/docker-compose.yml up -d
 cp deploy/casdoor/.env.example deploy/casdoor/.env       # 填库口令与 issuer
 docker compose -f deploy/casdoor/docker-compose.yml up -d
 curl -fsS https://auth.pandabase.top/.well-known/openid-configuration | head -c 80
-
-# 4. 运维控制台（可选）。Casdoor 侧要先建 Application/Site/Permission，见 docs/identity.md 第七节
-bash scripts/pg-provision.sh reader casdoor              # 建只读角色 dbx_read，打印一次 DSN
-cp deploy/dbx/.env.example deploy/dbx/.env               # 填 DBX_PASSWORD
-docker compose -f deploy/dbx/docker-compose.yml up -d
 ```
 
 宿主 Caddy 的站点块见 `deploy/caddy-site.caddyfile`——追加到 `/etc/caddy/Caddyfile` 再 reload，
@@ -39,7 +34,6 @@ docker compose -f deploy/dbx/docker-compose.yml up -d
 |---|---|
 | `deploy/postgres/` | 平台 PostgreSQL（独立 compose project） |
 | `deploy/casdoor/` | 身份服务，连平台 PG 的 `casdoor` 库 |
-| `deploy/dbx/` | 运维控制台 DBX（只读看库；公网入口先过 Casdoor 闸门） |
 | `deploy/Caddyfile`、`deploy/caddy-site.caddyfile` | 专用宿主机（容器版）与共享宿主机（片段）两份配置 |
 | `scripts/` | 建网、建库建角色、备份、项目改名迁移 |
 | `docs/decisions/` | ADR：仓库边界、PG 平台化、身份 |
@@ -69,7 +63,7 @@ pandabase-infra  ──提供──▶  网络 · 库/角色/DSN · Casdoor 应�
 | PostgreSQL | 17.11（`postgres:17-bookworm`），project `pandabase`，容器 `pandabase-postgres`，卷 `pandabase_pgdata`（48.7 MB），库 `casdoor` 10 MB |
 | 角色 | `pandabase_admin`（运维超管）/ `casdoor_app`（服务，非超管）/ `casdoor`（bootstrap，已 `NOLOGIN` 封存） |
 | Casdoor | `casbin/casdoor:latest`，project `pandabase-casdoor`，issuer `https://auth.pandabase.top` |
-| 边缘 | 宿主 Caddy（systemd），80/443；`baiduads` → `127.0.0.1:8000`，`auth` → `127.0.0.1:8001`，`dbx` → `127.0.0.1:8002`（先过 Casdoor 闸门） |
+| 边缘 | 宿主 Caddy（systemd），80/443；`baiduads` → `127.0.0.1:8000`，`auth` → `127.0.0.1:8001` |
 | 业务 | `mybmo-mcp`，仓库独立，模式 `oidc`，容器未被本次迁移重启 |
 | 迁移 | 2026-11-08 20:01 完成，旧 project `mybmo-casdoor` 与旧卷保留至 11-15；备份在 `backups/rename-2026-11-08-200101/` |
 | 业务 | `mybmo-mcp`，仓库独立，模式 `oidc` |
@@ -77,6 +71,5 @@ pandabase-infra  ──提供──▶  网络 · 库/角色/DSN · Casdoor 应�
 
 ## 不做
 
-不做业务编排与审批、不在反向代理做鉴权（唯一例外是 DBX 控制台的**纯闸门**，
-见 ADR 0004）、不引 K8s、不提供 DCR、不做跨业务共库共表。
-理由分别见 ADR 0001/0003/0004 与业务仓库的 ADR 0003。
+不做业务编排与审批、不在反向代理做鉴权、不引 K8s、不提供 DCR、不做跨业务共库共表。
+理由分别见 ADR 0001/0003 与业务仓库的 ADR 0003。

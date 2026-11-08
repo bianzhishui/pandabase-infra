@@ -8,9 +8,7 @@
 ```text
 公网 ──:443──▶ 宿主 Caddy（systemd）
                  ├ baiduads.pandabase.top → 127.0.0.1:8000   业务（mybmo-mcp）
-                 ├ auth.pandabase.top     → 127.0.0.1:8001   Casdoor
-                 └ dbx.pandabase.top      → 127.0.0.1:8002   DBX 控制台
-                                              ↑ 先 forward_auth 问 Casdoor（纯闸门）
+                 └ auth.pandabase.top     → 127.0.0.1:8001   Casdoor
 ```
 
 | 组件 | 监听 | 暴露面 |
@@ -18,8 +16,7 @@
 | 宿主 Caddy | `*:80`、`*:443` | 公网 |
 | 业务容器 | `127.0.0.1:8000` | 仅回环 |
 | Casdoor | `127.0.0.1:8001` | 仅回环（管理台） |
-| DBX 控制台 | `127.0.0.1:8002` | 仅回环；公网必须先过 Casdoor 闸门 |
-| PostgreSQL | 容器网络内 `5432` | 未发布端口（`pandabase` 与 `pandabase-ops`） |
+| PostgreSQL | 容器网络内 `5432` | 未发布端口 |
 
 ## 二、接入一个站点
 
@@ -36,16 +33,11 @@ Caddy 的全局 `email` 只能出现在文件最前面；宿主配置里没有�
 
 ## 三、三条不能改的约束
 
-1. **反代不做身份注入。** 让 Caddy 注入 `X-User` 头、应用信任它，等于留一条直连回环即可伪造的旁路。
+1. **反代不做鉴权。** 让 Caddy 注入 `X-User` 头、应用信任它，等于留一条直连回环即可伪造的旁路。
    业务必须自己校验 Bearer 令牌。
-   唯一例外是 DBX 控制台的 forward_auth 闸门：它只回答「放行/拒绝」，不注入任何身份头，
-   且 DBX 本身不消费身份头。四条前提见 `docs/decisions/0004`。
-   判断标准不是「这个服务要不要登录」，而是「**后端会不会信任反代注入的身份**」。
 2. **反代不能缓冲。** Streamable HTTP 依赖即时刷新；Caddy 的 `reverse_proxy` 默认不缓冲，
    换 nginx 必须显式关 `proxy_buffering` 并调 `proxy_read_timeout`，否则表现为「连上了但一动不动」。
 3. **`/healthz` 不鉴权。** 容器 HEALTHCHECK、外部监控、排障都要能直接打到；它不返回账户与令牌。
-   DBX 的探针同理，走容器内 `127.0.0.1:4224/api/auth/check`，**不要**为了让探针通过
-   就往 Casdoor 的 Public paths 里加路径——那等于开一个免登录入口。
 
 ## 四、证书
 

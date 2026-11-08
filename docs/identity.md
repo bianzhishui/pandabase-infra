@@ -38,7 +38,6 @@ curl -fsS https://auth.pandabase.top/.well-known/jwks | head -c 200
 |---|---|---|---|---|
 | `mybmo-mcp` | `709a8e16656a223a1ab7` | `authorization_code` + `refresh_token` | **待填** | 业务专用（2026-11-08 建） |
 | `app-built-in` | `60fda1d9bedd4615eb90` | `authorization_code` + `refresh_token` | 空 | Casdoor 自带示例，**password grant 已于 2026-11-08 关闭**；业务白名单里暂留它的 id 作为回滚退路 |
-| `dbx` | **待填** | `authorization_code` + `refresh_token` | `https://dbx.pandabase.top/caswaf-handler` | 运维控制台 DBX 的 forward-auth 闸门（非业务，见 ADR 0004） |
 
 新应用是从 `app-built-in` 复制出来的（scope 数组一并带过来），
 client_secret 在 Casdoor 控制台 `Applications → mybmo-mcp` 里查看，不要写进仓库。
@@ -71,27 +70,3 @@ client_secret 在 Casdoor 控制台 `Applications → mybmo-mcp` 里查看，不
 - 恢复 `globals.sql`、建角色这类操作要用 `pandabase_admin`
 - 备份见 `docs/postgres.md`；`casdoor` 库里除了账号，还有**JWT 签名证书**——
   这个库丢了等于换钥匙，所有令牌立即失效
-
-## 七、forward-auth（只给运维控制台）
-
-Casdoor 原生提供 `GET /api/forward-auth`：`200` + `X-Forwarded-User/Email/Groups`、未登录
-`302/401`（带 `Location`）、无权限 `403`。宿主 Caddy 用它给 `dbx.pandabase.top` 当闸门。
-这是唯一一处「反代做鉴权」，边界与代价见 [ADR 0004](decisions/0004-dbx-console.md)。
-
-配置顺序不能乱，**第 4 步是最容易漏、且漏了反而更开放的**：
-
-| # | 位置 | 填什么 |
-|---|---|---|
-| 1 | Applications → 新建 `dbx` | 从 `app-built-in` 复制；只勾 `authorization_code` + `refresh_token`；关闭注册 |
-| 2 | 该应用的 Redirect URLs | `https://dbx.pandabase.top/caswaf-handler`（不是 OAuth 回调，是种 cookie 的落点） |
-| 3 | Sites → Add | Domain=`dbx.pandabase.top`，Casdoor app=`dbx`，**Host/Port 留空**，SSL mode=`None`（TLS 归宿主 Caddy） |
-| 4 | Permissions → Add | resource type=`Application`，resource=`dbx`，users=授权的那几个人 |
-| 5 | 该 Site 的 Public paths | **留空** |
-
-两个反直觉的行为，改配置前必须记住：
-
-- **没有 Permission 就是全放行**：组织内所有用户都能进。这是默认失败开放，不是默认拒绝。
-- **`Public paths` 写 `/` 或 `/api` 等于没有闸门**。加任何免登录路径之前先想清楚它在保护谁。
-
-闸门不是即时吊销：Casdoor 至少每分钟重新校验一次用户与权限，所以禁用账号后
-最多约 60 秒才 403。这一点决定了验收方式——见 `docs/operations.md` 的检查清单。

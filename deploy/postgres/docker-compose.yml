@@ -24,10 +24,7 @@ services:
       - pgdata:/var/lib/postgresql/data
     networks:
       - pandabase
-      # 只给 DBX 用的侧门（见 docs/decisions/0004）：业务容器不在这个网络上，
-      # 因此业务被攻破也连不到数据库控制台。改这里要重建 PG —— 是变更窗口动作。
-      - pandabase-ops
-    # 不发布端口：PG 只在 pandabase 与 pandabase-ops 网络内可达
+    # 不发布端口：PG 只在 pandabase 网络内可达
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
       interval: 10s
@@ -40,6 +37,4 @@ volumes:
 
 networks:
   pandabase:
-    external: true
-  pandabase-ops:
     external: true

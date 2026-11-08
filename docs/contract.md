@@ -8,7 +8,7 @@
 | 项 | 值 | 备注 |
 |---|---|---|
 | 共享网络 | `pandabase` | 由 `scripts/bootstrap-network.sh` 创建；业务 compose 用 `external: true` |
-| PostgreSQL | `pandabase-postgres:5432` | 在 `pandabase` 与 `pandabase-ops` 两个网络内可达，**不发布端口** |
+| PostgreSQL | `pandabase-postgres:5432` | 只在 `pandabase` 网络内可达，**不发布端口** |
 | 业务库与角色 | `<app>` / 角色 `<app>` | 由 `scripts/pg-provision.sh` 建，最小权限、带连接数上限 |
 | DSN 模板 | `postgresql://<app>:<pwd>@pandabase-postgres:5432/<app>` | 口令由 infra 生成后一次性交付 |
 | 授权服务器 | `https://auth.pandabase.top` | issuer 不可变 |
@@ -16,7 +16,6 @@
 | 每个业务的 client_id | Casdoor 应用 ID | 业务把它加进自己的 audience 白名单 |
 | TLS / 域名 | 宿主 Caddy | 业务只需提供域名与上游端口 |
 | 备份 | 见 `docs/postgres.md` | 新业务上线时必须确认已进备份范围 |
-| 运维控制台 | `https://dbx.pandabase.top` | 只给运维用。**业务不需要知道它，也不允许依赖它** |
 
 ## 二、业务需要满足什么
 

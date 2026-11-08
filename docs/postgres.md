@@ -11,7 +11,6 @@
 | `casdoor_app` | Casdoor 服务自己 | `LOGIN`，owner of `casdoor` 库及其对象，`CONNECTION LIMIT 20` | `deploy/casdoor/.env` |
 | `casdoor` | initdb 创建的 bootstrap 超级用户 | **已封存**：`NOLOGIN` + `CONNECTION LIMIT 0`（PG 不允许摘掉它的 SUPERUSER，见下） | 已从 Casdoor 配置中移除 |
 | `<app>` | 每个业务一个 | `LOGIN`，owner of 自己的库，`CONNECTION LIMIT 20` | infra 生成后一次性交付业务方 |
-| `dbx_read` | DBX 控制台的只读连接 | `LOGIN`，只有 `SELECT`；**按库逐个授权**，`CONNECTION LIMIT 5` | `pg-provision.sh reader` 打印一次 |
 
 > **bootstrap 超级用户不能降权**。PostgreSQL 会直接拒绝：
 > `permission denied to alter role / DETAIL: The bootstrap superuser must have the SUPERUSER attribute`。
@@ -23,20 +22,6 @@
 1. **没有任何业务角色是 superuser**。这条是平台化的前提：一个业务被攻破不能波及别人的库。
 2. 业务角色**只**拥有自己的库，不跨库授权。需要跨库读写在设计上就不允许。
 3. 建库建角色只走 `scripts/pg-provision.sh`，不手工敲 SQL——否则权限模型会在某次赶时间时破口。
-
-`dbx_read` 不是对第 2 条的例外：它是**只读**角色，而且每读一个库都要显式再跑一次
-`bash scripts/pg-provision.sh reader <库>`，权限面始终写在明面上。它不做 `pg_read_all_data`
-那种「一次授全实例」的授权——那才是第 2 条要防的东西。
-
-建只读账号（只读 + 只给这一个库，重复执行会给已有角色补授权）：
-
-```bash
-bash scripts/pg-provision.sh reader casdoor
-# 产物：角色 dbx_read、该库的 CONNECT/USAGE/SELECT、以及「今后新表也自动可读」的默认权限
-```
-
-不给 `SUPERUSER` / `CREATEDB` / `CREATEROLE`，也不给 DDL、DML。`pandabase_admin` 不写进 DBX
-的连接列表（见 `docs/decisions/0004` 第 6 条）。
 
 ## 二、库清单
 
