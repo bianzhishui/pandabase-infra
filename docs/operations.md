@@ -75,6 +75,7 @@ bash scripts/pg-backup.sh
 | DBX 502 | `pandabase-dbx` 没起 / 8002 没监听 | `compose ps`、`ss -lntp \| grep 8002` |
 | DBX 连不上库 | 容器不在 `pandabase-ops` / PG 没加入该网络 / 角色无权限 | `docker network inspect pandabase-ops` 看两个容器都在 |
 | DBX 里看不到新建的表 | 默认权限没设（`reader` 只在建角色那次设过） | 重跑 `bash scripts/pg-provision.sh reader <库>` |
+| **所有站点外部访问全挂，服务端自测 200** | 域名未备案被拦截（腾讯云） | 见下面第七节。**先查备案，别动 Caddy** |
 
 ## 五、变更窗口
 
@@ -112,3 +113,26 @@ bash scripts/pg-backup.sh
 - [ ] DBX：确认镜像内有 `curl` 或 `wget` 后补 HEALTHCHECK
 - [ ] DBX：`pandabase_dbx_data` 不进异地备份（卷内 `.dbx/secret.key` 约等于库口令），
       但要在本地密码管理器里另存一份连接清单
+
+## 七、备案：公网形态的前提（2026-11-08 实测）
+
+**这台机器上的域名没有完成 ICP 备案，外网访问会被腾讯云拦截。** 症状很有欺骗性，
+因为服务端自测一切正常——请求在云边缘就被处理掉了，根本到不了 Caddy。
+
+| 探测 | 未备案时的结果 |
+|---|---|
+| `curl -I http://<域名>/` | `302` 到 `https://dnspod.qcloud.com/static/webblock.html?d=<域名>`，页面写「您的网站未完成备案」 |
+| `openssl s_client -connect <IP>:443` | **不带 SNI 能握手成功**，带上 `<域名>` 的 SNI 就被 RST |
+| `curl https://<域名>/` | `SSL connect error`，或 `unexpected eof while reading` |
+| 服务端 `curl https://<域名>/` | `200`——发往自身公网 IP 走本地路由，不经过云边缘 |
+| 海外多点探测 | 各地都是 `Connection reset by peer` |
+
+三条结论：
+
+1. **ACME 的 http-01 与 tls-alpn-01 都会失败**，且报错指向验证器而不是本机
+   （`reader size limit exceeded` / `Connection reset by peer`）。看到这种报错先跑上面的 curl，
+   别去改 Caddy、别怀疑证书配置。
+2. **任何新域名（含 DBX 的 `dbx.pandabase.top`）在备案完成前都无法公网访问**，
+   所以「公网子域 + 网关」这条路当前不具备条件；回环 + SSH 隧道不受影响。
+3. 已签发证书可以继续用，但**到期续签会失败**——`auth` 与 `baiduads` 的证书
+   在 2027-02-06 到期，需要在那之前完成备案，否则整条身份链会先失效。

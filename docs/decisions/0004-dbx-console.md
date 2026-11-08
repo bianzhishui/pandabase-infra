@@ -88,3 +88,24 @@ PostgreSQL 走原生驱动（不拉 JRE）、支持只读连接与生产保护�
 - 需要「谁批准了什么变更」→ DBX 不是审批系统，别拿「生产保护」当审批
 - Casdoor 升级后 forward-auth 的语义变化（3xx / 401 / 头名）→ 复核 `docs/edge.md` 的实测记录
 - DBX 支持 OIDC → 立即去掉共享口令，改由它自己校验令牌，本 ADR 的例外随之失效
+
+## 实施记录（2026-11-08）
+
+已完成：`pandabase-ops` 网络、PG 双网络（重建一次，约 10 秒，Casdoor 随之重启）、
+`pandabase-dbx` 容器（只绑 `127.0.0.1:8002`，`mem_limit 512m`）、`dbx_read` 只读角色。
+
+**公网入口未启用**：dbx 的站点块已从宿主 Caddy 撤下。原因是备案——
+80 端口被跳到腾讯云的「未备案」拦截页，443 对这三个域名的 SNI 直接 RST（不带 SNI 却能握手），
+ACME 的 http-01 与 tls-alpn-01 因此全部失败。这不是 Caddy 或证书配置问题，
+详见 `docs/operations.md` 第七节。
+
+当前可用路径（回环 + 隧道，也就是 ADR 里被否决但保留了的那条）：
+
+```bash
+ssh -N -L 8002:127.0.0.1:8002 ubuntu@49.232.229.71
+# 浏览器打开 http://127.0.0.1:8002
+```
+
+备案完成后：把 `deploy/caddy-site.caddyfile` 里的 dbx 块追加回 `/etc/caddy/Caddyfile`，
+做完 Casdoor 的五处配置（`docs/identity.md` 第七节），再按验收清单跑一遍即可。
+本 ADR 其余决策不变。
