@@ -99,9 +99,19 @@ PG 原先在 `mybmo-casdoor` 这个 project 下，角色 `casdoor` 是超级用�
 | 6 | 改 Casdoor 的 `POSTGRES_USER=casdoor_app`，重建容器 | 几秒中断 |
 | 7 | 回归：discovery / `application` 行数 / 表数 / 业务 `/healthz` 与 `/mcp` 401 | — |
 
-回滚：旧 project 与旧卷 `mybmo-casdoor_pgdata` 在第 7 天前一直保留，把 Casdoor 的
-`POSTGRES_USER` 与 `dataSourceName` 改回旧值并 `compose up` 即回到迁移前，3 分钟内完成
-（旧库里对象属主仍是 `casdoor`，回去不需要反向转移）。
+回滚：**旧栈已于 2026-11-08 22:09 删除**（旧 project、两个旧卷、目录副本都清了），
+所以现在不存在「把旧栈起回来」这条退路，只能从备份恢复：
+
+```bash
+# 整卷恢复（含 PG 系统目录，等价于回到迁移前）
+docker volume create pandabase_pgdata_restore
+docker run --rm -v pandabase_pgdata_restore:/to -v "$PWD/backups/rename-2026-11-08-200101":/b \
+  alpine sh -c 'cd /to && tar xzf /b/pgdata-16to17.tgz'
+# 然后把 deploy/postgres/docker-compose.yml 的卷名临时指向它，起 PG 验证后再换回
+```
+
+或者只回滚 `casdoor` 库的数据：`pg_restore -U pandabase_admin -d casdoor --clean --if-exists
+< backups/rename-2026-11-08-200101/casdoor.dump`。
 
 迁移期间的影响：Casdoor 不可用（新令牌签不出来）。业务侧已缓存的 JWKS 在 10 分钟内仍能验证
 旧令牌；`mcp` 容器本身不依赖 PG，不会被重启。

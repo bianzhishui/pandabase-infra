@@ -65,7 +65,7 @@ pandabase-infra  ──提供──▶  网络 · 库/角色/DSN · Casdoor 应�
 | Casdoor | `casbin/casdoor:latest`，project `pandabase-casdoor`，issuer `https://auth.pandabase.top` |
 | 边缘 | 宿主 Caddy（systemd），80/443；`baiduads` → `127.0.0.1:8000`，`auth` → `127.0.0.1:8001` |
 | 业务 | `mybmo-mcp`，仓库独立，模式 `oidc`，容器未被本次迁移重启 |
-| 迁移 | 2026-11-08 20:01 完成，旧 project `mybmo-casdoor` 与旧卷保留至 11-15；备份在 `backups/rename-2026-11-08-200101/` |
+| 迁移 | 2026-11-08 20:01 完成；旧 project、旧卷、目录副本已于 22:09 删除，回滚只剩 `backups/` 里的 dump 与整卷 tar |
 | 业务 | `mybmo-mcp`，仓库独立，模式 `oidc` |
 | 待办 | PG 仍在旧 project `mybmo-casdoor` 下，改名与降权见 `docs/postgres.md` 的迁移章节 |
 

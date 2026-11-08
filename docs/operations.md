@@ -85,7 +85,8 @@ bash scripts/pg-backup.sh
 
 - [x] PG 从旧 project `mybmo-casdoor` 迁到 `pandabase`（2026-11-08 20:01，见 `docs/postgres.md`）
 - [x] `casdoor` 角色隔离：服务改用 `casdoor_app`，bootstrap 角色 `NOLOGIN` 封存
-- [ ] 旧 project 与旧卷在第 7 天（2026-11-15）后删除
+- [x] 旧 project `mybmo-casdoor`、两个旧卷、目录副本已删除（2026-11-08 22:09，提前于 11-15）
+      ——回滚退路随之消失，只剩 `backups/rename-2026-11-08-200101/` 里的 dump 与整卷 tar
 - [x] `app-built-in` 的 `password` grant 已关闭；业务改用专用 application `mybmo-mcp`
       （client_id `709a8e16656a223a1ab7`），2026-11-08 20:22
 - [x] `mybmo-mcp` 的 `redirect_uris` 已填（`http://127.0.0.1:33418/callback`）
