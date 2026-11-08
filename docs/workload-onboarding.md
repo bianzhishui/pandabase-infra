@@ -64,4 +64,4 @@ networks:
 
 | 业务 | 域名 | 端口 | 库/角色 | client_id | 卷 | 接入日期 |
 |---|---|---|---|---|---|---|
-| `mybmo-mcp` | `baiduads.pandabase.top` | 8000 | 暂无（用文件式 `tenancy.json`） | `app-built-in`（待规范化为 `mybmo-mcp`） | `mybmo_data` | 2026-11-08 |
+| `mybmo-mcp` | `baiduads.pandabase.top` | 8000 | 暂无（用文件式 `tenancy.json`） | `709a8e16656a223a1ab7`（应用 `mybmo-mcp`；redirect_uris 待填） | `mybmo_data` | 2026-11-08 |

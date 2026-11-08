@@ -32,23 +32,37 @@ curl -fsS https://auth.pandabase.top/.well-known/openid-configuration \
 curl -fsS https://auth.pandabase.top/.well-known/jwks | head -c 200
 ```
 
-## 三、新增一个业务（一业务一 application）
+## 三、当前应用清单
+
+| 应用 | client_id | grant_types | redirect_uris | 用途 |
+|---|---|---|---|---|
+| `mybmo-mcp` | `709a8e16656a223a1ab7` | `authorization_code` + `refresh_token` | **待填** | 业务专用（2026-11-08 建） |
+| `app-built-in` | `60fda1d9bedd4615eb90` | `authorization_code` + `refresh_token` | 空 | Casdoor 自带示例，**password grant 已于 2026-11-08 关闭**；业务白名单里暂留它的 id 作为回滚退路 |
+
+新应用是从 `app-built-in` 复制出来的（scope 数组一并带过来），
+client_secret 在 Casdoor 控制台 `Applications → mybmo-mcp` 里查看，不要写进仓库。
+
+> **`redirect_uris` 为空意味着授权码流程走不通。** 接具体客户端前必须把该客户端的
+> 固定回调填进去（例：`https://claude.ai/api/mcp/auth_callback`），一个客户端一个 URI。
+> 填完不需要重启 Casdoor，重新发起登录即可。
+
+## 四、新增一个业务（一业务一 application）
 
 每一步都可回滚，顺序不要改：
 
 1. Casdoor 控制台 → Applications → 新建，Name 用业务名（如 `mybmo-mcp`）
 2. Redirect URL 填该客户端固定回调；只勾 `authorization_code` + `refresh_token`，
-   **不要勾 `password`**（当前 `app-built-in` 还开着，属于待关项）
+   **不要勾 `password`**
 3. 在应用里登记该业务的 scope（对象数组形状），如 `baidu:read` / `baidu:write` / `baidu:admin`
 4. 记下 client_id，交付业务方：它要加进自己的 audience 白名单
 5. 把 client_id 与所属业务登记到 `docs/workload-onboarding.md`
 
-## 四、停用一个客户端
+## 五、停用一个客户端
 
 从业务的白名单里删掉那个 client_id 并重启业务即可。**不要**靠删 Casdoor 应用来"顺手撤销"——
 删应用后已签发令牌在过期前仍然有效，而业务的报错会变成难懂的 401。
 
-## 五、Casdoor 自己的库
+## 六、Casdoor 自己的库
 
 `casdoor` 库在平台 PG 上，角色 `casdoor` 已降权（非 superuser）。注意：
 
