@@ -164,8 +164,8 @@ def main() -> int:
         except Exception:
             pass
 
-    print(f"等待浏览器回调（最长 {TIMEOUT_SECONDS}s）…")
-    thread.join(TIMEOUT_SECONDS)
+    print(f"等待浏览器回调（最长 {ARGS.timeout}s）…")
+    thread.join(ARGS.timeout)
     if thread.is_alive():
         print("超时：没有收到回调。检查 redirect_uri 是否与 Casdoor 里登记的完全一致。", file=sys.stderr)
         return 1
@@ -225,6 +225,7 @@ if __name__ == "__main__":
     parser.add_argument("--mcp-url", default="https://baiduads.pandabase.top/mcp")
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--print-url", action="store_true")
+    parser.add_argument("--timeout", type=int, default=TIMEOUT_SECONDS)
     ARGS = parser.parse_args()
     if not ARGS.client_id:
         parser.error("需要 --client-id 或环境变量 CASDOOR_CLIENT_ID")
