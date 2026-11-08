@@ -8,7 +8,7 @@
 | 项 | 值 | 备注 |
 |---|---|---|
 | 共享网络 | `pandabase` | 由 `scripts/bootstrap-network.sh` 创建；业务 compose 用 `external: true` |
-| PostgreSQL | `pandabase-postgres:5432` | 只在 `pandabase` 网络内可达，**不发布端口** |
+| PostgreSQL | `pandabase-postgres:5432` | 只在 `pandabase` 网络内可达；宿主回环另有 `127.0.0.1:5432`，仅供 SSH 隧道/DBX，**公网不可达** |
 | 业务库与角色 | `<app>` / 角色 `<app>` | 由 `scripts/pg-provision.sh` 建，最小权限、带连接数上限 |
 | DSN 模板 | `postgresql://<app>:<pwd>@pandabase-postgres:5432/<app>` | 口令由 infra 生成后一次性交付 |
 | 授权服务器 | `https://auth.pandabase.top` | issuer 不可变 |

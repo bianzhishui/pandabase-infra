@@ -1,7 +1,9 @@
 # 平台 PostgreSQL
 
-一个实例、N 个库。实例地址 `pandabase-postgres:5432`（只在 `pandabase` 网络内），
-不发布端口。版本钉在 `postgres:17-bookworm`。
+一个实例、N 个库。实例地址 `pandabase-postgres:5432`（只在 `pandabase` 网络内）。
+宿主另有 `127.0.0.1:5432` 的回环发布，只给 SSH 隧道和本地 DBX 用——**公网不可达**，
+因为 PG 自身 `ssl=off`，一旦绑到 `0.0.0.0` 就是明文对全网开放。
+版本钉在 `postgres:17-bookworm`。
 
 ## 一、角色模型
 

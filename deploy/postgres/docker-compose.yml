@@ -24,7 +24,10 @@ services:
       - pgdata:/var/lib/postgresql/data
     networks:
       - pandabase
-    # 不发布端口：PG 只在 pandabase 网络内可达
+    # 只绑回环：给宿主上的 SSH 隧道 / DBX 用，公网仍然摸不到。
+    # 千万别写成 "5432:5432"——那是绑 0.0.0.0，而 PG 自己 ssl=off，等于明文对全网开放。
+    ports:
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
       interval: 10s
