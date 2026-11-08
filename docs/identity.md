@@ -70,3 +70,30 @@ client_secret 在 Casdoor 控制台 `Applications → mybmo-mcp` 里查看，不
 - 恢复 `globals.sql`、建角色这类操作要用 `pandabase_admin`
 - 备份见 `docs/postgres.md`；`casdoor` 库里除了账号，还有**JWT 签名证书**——
   这个库丢了等于换钥匙，所有令牌立即失效
+
+## 七、验证与排查
+
+**工具**：`python3 scripts/verify-oauth.py`——起回环监听 → 浏览器授权（PKCE S256 + state）
+→ 换 token → 解 `aud`/`scope` → 带令牌调一次 `/mcp`。`/mcp` 返回 400/406 表示身份已通过
+（MCP 握手拒绝空 body），401 才是没通过。
+
+**本机到 `*.pandabase.top` 的 443 被中间设备掐断时**（症状：`curl` 返回 000、
+Python 抛 `SSL: UNEXPECTED_EOF_WHILE_READING`，而同域名的浏览器能开、服务器侧 curl 200），
+把脚本放到服务器跑，用 SSH 隧道把浏览器回调接回来：
+
+```bash
+# 本机：转发回调端口
+ssh -N -L 33418:127.0.0.1:33418 ubuntu@<host>
+
+# 服务器：监听并把授权 URL 打出来（-u 必须有，否则 stdout 缓冲看不到 URL）
+cd /opt/pandabase-infra
+CASDOOR_CLIENT_ID=<cid> CASDOOR_CLIENT_SECRET=<secret> \
+  python3 -u scripts/verify-oauth.py --no-browser --timeout 900
+```
+
+**令牌有效期**：`expire_in_hours` 从 `app-built-in` 继承过来是 **168（7 天）**，
+`refresh_expire_in_hours=0`。对 MCP 客户端偏长——拿到一次令牌就能用一周，且无法按天撤销。
+建议在控制台应用页改成 **1 小时 + refresh token**，真正的长会话交给 refresh。
+
+**client_secret 泄露处置**：一旦出现在终端历史或对话里，立即在控制台重新生成，
+并同步更新客户端配置；旧 secret 不会自动失效。

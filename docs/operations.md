@@ -88,7 +88,9 @@ bash scripts/pg-backup.sh
 - [ ] 旧 project 与旧卷在第 7 天（2026-11-15）后删除
 - [x] `app-built-in` 的 `password` grant 已关闭；业务改用专用 application `mybmo-mcp`
       （client_id `709a8e16656a223a1ab7`），2026-11-08 20:22
-- [ ] `mybmo-mcp` 应用的 `redirect_uris` 待填（为空时授权码流程走不通）
-- [ ] 客户端在新应用上跑通一次授权码流程后，从业务白名单里移除旧 `app-built-in` 的 client_id
+- [x] `mybmo-mcp` 的 `redirect_uris` 已填（`http://127.0.0.1:33418/callback`）
+- [x] 授权码流程已跑通（`aud=['709a8e16656a223a1ab7']`、`/mcp` 400），
+      旧 `app-built-in` 的 client_id 已从白名单移除，`client_secret` 已轮换
+- [ ] 令牌有效期 `expire_in_hours=168`（7 天）偏长，建议改 1 小时 + refresh
 - [ ] 备份加 cron 与异地留存
 - [ ] `/healthz` 外部监控（当前只有容器 HEALTHCHECK）
