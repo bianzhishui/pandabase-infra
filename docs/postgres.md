@@ -7,9 +7,15 @@
 
 | 角色 | 用途 | 属性 | 口令存放 |
 |---|---|---|---|
-| `pandabase_admin` | 建库建角色、备份、升级 | `LOGIN SUPERUSER CREATEDB CREATEROLE`（平台唯一超级用户，**仅运维使用**） | `deploy/postgres/.env` |
-| `casdoor` | Casdoor 服务自己 | `LOGIN`，owner of `casdoor` 库，`NOSUPERUSER NOCREATEDB NOCREATEROLE`，`CONNECTION LIMIT 20` | `deploy/casdoor/.env` |
+| `pandabase_admin` | 建库建角色、备份、升级 | `LOGIN SUPERUSER CREATEDB CREATEROLE`（平台唯一可登录的超级用户，**仅运维使用**） | `deploy/postgres/.env` |
+| `casdoor_app` | Casdoor 服务自己 | `LOGIN`，owner of `casdoor` 库及其对象，`CONNECTION LIMIT 20` | `deploy/casdoor/.env` |
+| `casdoor` | initdb 创建的 bootstrap 超级用户 | **已封存**：`NOLOGIN` + `CONNECTION LIMIT 0`（PG 不允许摘掉它的 SUPERUSER，见下） | 已从 Casdoor 配置中移除 |
 | `<app>` | 每个业务一个 | `LOGIN`，owner of 自己的库，`CONNECTION LIMIT 20` | infra 生成后一次性交付业务方 |
+
+> **bootstrap 超级用户不能降权**。PostgreSQL 会直接拒绝：
+> `permission denied to alter role / DETAIL: The bootstrap superuser must have the SUPERUSER attribute`。
+> 迁移时因此改为「新建 `casdoor_app` 承载服务 + 逐对象转移属主 + 封存 bootstrap 角色」。
+> 封存不等于删除：它的属性仍在，但 `NOLOGIN` + 连接上限 0 使其无法被使用。
 
 三条硬规则：
 
@@ -87,12 +93,30 @@ PG 原先在 `mybmo-casdoor` 这个 project 下，角色 `casdoor` 是超级用�
 | 2 | 停 casdoor、postgres | 停机开始 |
 | 3 | 建 `pandabase_pgdata`，解包旧数据（同版本 17，直接拷目录） | 无（旧卷不动） |
 | 4 | 起新 project 的 PG，校验 `PG_VERSION=17` | — |
-| 5 | 建 `pandabase_admin`，把 `casdoor` 库 owner 指向 `casdoor`，再摘掉其超级权限 | **开始降权** |
-| 6 | 改 Casdoor 连接串为 `host=pandabase-postgres`，起 Casdoor | — |
-| 7 | 回归：discovery / `application` 行数 / scope / 登录 / 业务 `/mcp` 401 | — |
+| 5 | 建 `pandabase_admin`；建 `casdoor_app` 并逐对象转移属主（表/序列/视图）+ 库 owner；封存 bootstrap 角色 | 角色切换 |
+| 6 | 改 Casdoor 的 `POSTGRES_USER=casdoor_app`，重建容器 | 几秒中断 |
+| 7 | 回归：discovery / `application` 行数 / 表数 / 业务 `/healthz` 与 `/mcp` 401 | — |
 
-回滚：旧 project 与旧卷 `mybmo-casdoor_pgdata` 在第 7 天前一直保留，把 Casdoor 连接串改回
-`host=postgres` 并 `compose up` 即回到迁移前，3 分钟内完成。
+回滚：旧 project 与旧卷 `mybmo-casdoor_pgdata` 在第 7 天前一直保留，把 Casdoor 的
+`POSTGRES_USER` 与 `dataSourceName` 改回旧值并 `compose up` 即回到迁移前，3 分钟内完成
+（旧库里对象属主仍是 `casdoor`，回去不需要反向转移）。
 
 迁移期间的影响：Casdoor 不可用（新令牌签不出来）。业务侧已缓存的 JWKS 在 10 分钟内仍能验证
 旧令牌；`mcp` 容器本身不依赖 PG，不会被重启。
+
+### 实施记录（2026-11-08 20:01）
+
+第一次执行在「给 bootstrap 超级用户降权」处失败，Casdoor 停了约 90 秒。原因是 PostgreSQL
+不允许 `ALTER ROLE casdoor NOSUPERUSER`（见第一节的注）。改走 `casdoor_app` 方案后一次通过：
+
+```text
+角色终态
+  casdoor         super=t  login=f  connlimit=0     ← bootstrap，封存
+  casdoor_app     super=f  login=t  connlimit=20    ← Casdoor 实际使用
+  pandabase_admin super=t  login=t  connlimit=-1    ← 运维专用
+数据：application=1  tables=50（与迁移前一致），50 张表属主均为 casdoor_app
+备份：backups/rename-2026-11-08-200101/（casdoor.dump 140K + 两个旧卷 tar）
+```
+
+教训：涉及角色属性的迁移，先在 dry-run 里把「PG 是否允许这条 ALTER」验证掉——
+`--dry-run` 目前只读数据，不做权限可行性检查。

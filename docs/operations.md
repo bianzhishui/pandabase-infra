@@ -83,7 +83,9 @@ bash scripts/pg-backup.sh
 
 待办：
 
-- [ ] PG 从旧 project `mybmo-casdoor` 迁到 `pandabase`，并给 `casdoor` 角色降权（`scripts/pg-rename-project.sh`）
+- [x] PG 从旧 project `mybmo-casdoor` 迁到 `pandabase`（2026-11-08 20:01，见 `docs/postgres.md`）
+- [x] `casdoor` 角色隔离：服务改用 `casdoor_app`，bootstrap 角色 `NOLOGIN` 封存
+- [ ] 旧 project 与旧卷在第 7 天（2026-11-15）后删除
 - [ ] `app-built-in` 的 `password` grant 关闭；业务改用专用 application `mybmo-mcp`
 - [ ] 备份加 cron 与异地留存
 - [ ] `/healthz` 外部监控（当前只有容器 HEALTHCHECK）

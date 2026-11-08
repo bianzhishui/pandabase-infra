@@ -50,8 +50,10 @@ has_volume() { local all; all="$(docker volume ls --format '{{.Name}}')"; grep -
 has_container() { local all; all="$(docker ps -a --format '{{.Names}}')"; grep -qx "$1" <<< "$all"; }
 running() { local all; all="$(docker ps --format '{{.Names}}')"; grep -qx "$1" <<< "$all"; }
 
-psql_old() { docker exec -i "$OLD_PG_CT" psql -v ON_ERROR_STOP=1 -U casdoor -d postgres "$@"; }
-psql_new() { docker exec -i "$NEW_PG_CT" psql -v ON_ERROR_STOP=1 -U "$1" -d postgres "${@:2}"; }
+# 两个 helper 都连 casdoor 库：pg_roles / pg_database 是全局可见的，
+# 而 application 等业务表只在 casdoor 库里。
+psql_old() { docker exec -i "$OLD_PG_CT" psql -v ON_ERROR_STOP=1 -U casdoor -d casdoor "$@"; }
+psql_new() { docker exec -i "$NEW_PG_CT" psql -v ON_ERROR_STOP=1 -U "$1" -d casdoor "${@:2}"; }
 
 # ---------------------------------------------------------------- 0. 预检
 log "0/7 预检"
@@ -113,7 +115,7 @@ cat <<EOF
    2. 停旧栈（$OLD_PROJECT）：casdoor + postgres
    3. 建新卷 $NEW_PGVOL / $NEW_CDVOL，把旧数据整目录拷过去（同版本 17，直接拷安全）
    4. 起新 project 的 PG（$NEW_PG_CT），校验 PG_VERSION=17
-   5. 建 $ADMIN_USER，把 casdoor 库 owner 指向 casdoor，再摘掉 casdoor 的超级权限
+   5. 建 $ADMIN_USER；建 casdoor_app 并转移库与对象属主；封存 bootstrap 角色（NOLOGIN）
    6. 起新 project 的 Casdoor（连 host=$NEW_PG_CT）
    7. 回归：application 行数、表数、discovery、业务 /healthz 与 /mcp 401
    旧卷 $OLD_PGVOL 与旧容器保留，第 7 天再删。回滚 = 起旧栈，3 分钟内。
@@ -178,28 +180,72 @@ wait_pg "$NEW_PG_CT" "$ADMIN_USER" || die "新 PG 没起来：docker logs $NEW_P
 info "PG 已就绪"
 
 # ---------------------------------------------------------------- 5. 角色
-log "5/7 角色与降权"
+log "5/7 角色与属主"
 ADMIN_PASS="$(env_get "$PG_ENV" POSTGRES_PASSWORD || true)"
+CASDOOR_PASS="$(env_get "$CD_ENV" POSTGRES_PASSWORD || true)"
+CASDOOR_ORIGIN="$(env_get "$CD_ENV" CASDOOR_ORIGIN || true)"
 [[ -n "$ADMIN_PASS" ]] || die "$PG_ENV 里 POSTGRES_PASSWORD 为空"
+[[ -n "$CASDOOR_PASS" ]] || die "$CD_ENV 里 POSTGRES_PASSWORD 为空"
 
 EXISTS="$(psql_new casdoor -Atc "select 1 from pg_roles where rolname = '$ADMIN_USER'" || true)"
 if [[ "$EXISTS" == "1" ]]; then
     info "角色 $ADMIN_USER 已存在"
 else
     psql_new casdoor -c "CREATE ROLE \"$ADMIN_USER\" LOGIN SUPERUSER CREATEDB CREATEROLE PASSWORD '$ADMIN_PASS'" >/dev/null
-    info "已创建 $ADMIN_USER（唯一超级用户，仅运维使用）"
+    info "已创建 $ADMIN_USER（唯一可登录的超级用户，仅运维使用）"
 fi
 
-psql_new casdoor -c 'ALTER DATABASE casdoor OWNER TO casdoor' >/dev/null
-info "casdoor 库 owner = casdoor"
+# initdb 建的 bootstrap 超级用户（原 POSTGRES_USER）**不能降权**：
+#   ALTER ROLE ... NOSUPERUSER -> "The bootstrap superuser must have the SUPERUSER attribute"
+# 所以改成：新建 casdoor_app 承载服务 + 转移属主 + 封存 bootstrap 角色。
+APP_EXISTS="$(psql_new "$ADMIN_USER" -Atc "select 1 from pg_roles where rolname = 'casdoor_app'" || true)"
+if [[ "$APP_EXISTS" == "1" ]]; then
+    info "角色 casdoor_app 已存在"
+else
+    psql_new "$ADMIN_USER" -c \
+        "CREATE ROLE casdoor_app LOGIN PASSWORD '$CASDOOR_PASS' CONNECTION LIMIT 20" >/dev/null
+    info "已创建服务角色 casdoor_app（非超级用户，连接上限 20）"
+fi
 
-psql_new casdoor -c 'ALTER ROLE casdoor NOSUPERUSER NOCREATEDB NOCREATEROLE' >/dev/null
-psql_new casdoor -c 'ALTER ROLE casdoor CONNECTION LIMIT 20' >/dev/null
-info "casdoor 已降权（NOSUPERUSER / NOCREATEDB / NOCREATEROLE，连接上限 20）"
+docker exec -i "$NEW_PG_CT" psql -v ON_ERROR_STOP=1 -U "$ADMIN_USER" -d postgres -c \
+    'ALTER DATABASE casdoor OWNER TO casdoor_app' >/dev/null
+docker exec -i "$NEW_PG_CT" psql -v ON_ERROR_STOP=1 -U "$ADMIN_USER" -d casdoor <<'SQL' >/dev/null
+DO $$
+DECLARE r record;
+BEGIN
+    FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+        EXECUTE format('ALTER TABLE public.%I OWNER TO casdoor_app', r.tablename);
+    END LOOP;
+    FOR r IN SELECT sequencename FROM pg_sequences WHERE schemaname = 'public' LOOP
+        EXECUTE format('ALTER SEQUENCE public.%I OWNER TO casdoor_app', r.sequencename);
+    END LOOP;
+    FOR r IN SELECT viewname FROM pg_views WHERE schemaname = 'public' LOOP
+        EXECUTE format('ALTER VIEW public.%I OWNER TO casdoor_app', r.viewname);
+    END LOOP;
+END $$;
+SQL
+OWNERS="$(docker exec -i "$NEW_PG_CT" psql -U "$ADMIN_USER" -d casdoor -At -F'|' -c \
+    "select tableowner, count(*) from pg_tables where schemaname='public' group by 1")"
+echo "$OWNERS" | sed 's/^/   属主 /'
+
+# 切换 Casdoor 的连接角色
+umask 077
+{
+    echo "POSTGRES_USER=casdoor_app"
+    printf 'POSTGRES_PASSWORD=%s\n' "$CASDOOR_PASS"
+    echo "CASDOOR_ORIGIN=${CASDOOR_ORIGIN:-https://auth.pandabase.top}"
+} > "$CD_ENV"
+chmod 600 "$CD_ENV"
+info "Casdoor 连接角色改为 casdoor_app"
+
+# 封存 bootstrap 角色：属性摘不掉，但可以禁止登录
+psql_new "$ADMIN_USER" -c 'ALTER ROLE casdoor NOLOGIN' >/dev/null
+psql_new "$ADMIN_USER" -c 'ALTER ROLE casdoor CONNECTION LIMIT 0' >/dev/null
+info "bootstrap 角色 casdoor 已封存（NOLOGIN + 连接上限 0）"
 
 # ---------------------------------------------------------------- 6. 起 Casdoor
 log "6/7 起新 Casdoor"
-docker compose -f "$NEW_STACK_DIR/casdoor/docker-compose.yml" up -d
+docker compose -f "$NEW_STACK_DIR/casdoor/docker-compose.yml" up -d --force-recreate casdoor
 sleep 5
 docker compose -f "$NEW_STACK_DIR/casdoor/docker-compose.yml" ps --format '   {{.Service}}  {{.Image}}  {{.Status}}'
 
@@ -215,6 +261,10 @@ echo "   tables:      $BEFORE_TABLES -> $AFTER_TABLES"
 if command -v curl >/dev/null; then
     printf '   discovery: '; curl -s -o /dev/null -w '%{http_code}\n' --max-time 10 \
         https://auth.pandabase.top/.well-known/openid-configuration
+    printf '   业务 /healthz: '; curl -s -o /dev/null -w '%{http_code}\n' --max-time 10 \
+        https://baiduads.pandabase.top/healthz
+    printf '   业务 /mcp 无令牌: '; curl -s -o /dev/null -w '%{http_code}\n' --max-time 10 \
+        -X POST -H 'Content-Type: application/json' -d '{}' https://baiduads.pandabase.top/mcp
 fi
 
 cat <<EOF

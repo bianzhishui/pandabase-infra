@@ -26,7 +26,11 @@ PostgreSQL 最初是作为 Casdoor 的附属品起的：与 Casdoor 同一个 co
      需要它是超级用户是因为 `pg_dumpall --globals-only` 要读 `pg_authid`——这是单机单人运维下的
      break-glass 取舍，见「重新评估条件」。
    - 每个业务一个角色，只拥有自己的库，无 `SUPERUSER` / `CREATEDB` / `CREATEROLE`，带 `CONNECTION LIMIT`
-   - 现有 `casdoor` 角色**降权**：`NOSUPERUSER NOCREATEDB NOCREATEROLE`，仅保留 `casdoor` 库的 owner
+   - Casdoor 用一个独立角色 `casdoor_app`（非超级用户，拥有 `casdoor` 库及其对象）。
+     **initdb 创建的 bootstrap 超级用户 `casdoor` 无法降权**——PostgreSQL 直接拒绝：
+     `permission denied to alter role / DETAIL: The bootstrap superuser must have the SUPERUSER attribute`。
+     所以它被**封存**：`NOLOGIN` + `CONNECTION LIMIT 0`，库与对象属主已转给 `casdoor_app`。
+     属性还在，但连不进来，等价于消除风险；`pandabase_admin` 是另一个可用的超级用户，需要时走它。
 4. **卷名显式固定**（`name: pandabase_pgdata`）。Docker 的卷名由 project 推导，不显式写死就会在
    改 project 名时静默产生一个空卷——表现为「数据没了」。
 5. **改名是一次数据迁移**，不是改配置：同大版本之间直接拷贝数据目录（tar），跨大版本才走
