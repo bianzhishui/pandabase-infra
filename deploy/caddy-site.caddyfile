@@ -38,3 +38,32 @@ baiduads.pandabase.top {
 		reverse_proxy 127.0.0.1:8000
 	}
 }
+
+# ---------------------------------------------------------------------------
+# 运维控制台 DBX（见 docs/decisions/0004）。
+#
+# 这是本仓库唯一一处「反代做鉴权」。理由不是它可以信任，而是 DBX 没有 OIDC 能力、
+# 也**不消费**任何身份头——所以 forward_auth 在这里只当闸门（放行/拒绝），不做身份注入。
+# 与此配套的三条约束，改这段之前先读 ADR 0004：
+#   1. 不 copy_headers。注入了就是给将来的「header 登录」留一条可伪造的通道。
+#   2. DBX 必须只经本反代可达。它只挂 pandabase-ops，业务容器解析不到它。
+#   3. DBX 自己仍要有口令。闸门是第二道，不是唯一一道。
+# ---------------------------------------------------------------------------
+dbx.pandabase.top {
+	encode zstd gzip
+
+	# forward-auth 的回调：直接交给 Casdoor，它在这里把会话 cookie 种到 dbx 域上。
+	# 少了这段，登录完会落到 DBX 的 404，然后被再踢回登录页。
+	handle /caswaf-handler {
+		reverse_proxy 127.0.0.1:8001
+	}
+
+	handle {
+		forward_auth 127.0.0.1:8001 {
+			uri /api/forward-auth
+			# 刻意不写 copy_headers：原因见上。
+			# Caddy 会自动带 X-Forwarded-Host/Uri，Casdoor 靠它定位 site。
+		}
+		reverse_proxy 127.0.0.1:8002
+	}
+}
