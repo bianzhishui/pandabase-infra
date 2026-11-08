@@ -1,0 +1,31 @@
+{
+	email {$ACME_EMAIL}
+}
+
+# 专用宿主机形态：整套服务跑在容器里，Caddy 也容器化（--profile dedicated）。
+# 共享宿主机形态不要用这份，改用 caddy-site.caddyfile 追加到宿主配置。
+#
+# 上游用容器名，因此本 Caddy 必须与业务容器同处 pandabase 网络。
+
+# 授权服务器。issuer 写进每个 JWT，改一次全废（见 docs/decisions/0003）。
+{$AUTH_HOST} {
+	reverse_proxy {$AUTH_UPSTREAM}
+}
+
+# 业务站点。每个业务复制这一段，改域名与上游。
+{$APP_HOST} {
+	encode zstd gzip
+
+	# 探活不鉴权：容器 HEALTHCHECK、外部监控、排障都要能直接打到。
+	# 它只返回版本与状态字段，不含账户与令牌。
+	handle /healthz {
+		reverse_proxy {$APP_UPSTREAM}
+	}
+
+	handle {
+		# 反代不做鉴权：令牌校验在业务进程内完成。
+		# 这里注入身份头等于留一条可被直连回环伪造的旁路。
+		# 默认不缓冲，Streamable HTTP 的长连接可以直接穿透。
+		reverse_proxy {$APP_UPSTREAM}
+	}
+}

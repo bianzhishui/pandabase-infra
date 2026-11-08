@@ -1,0 +1,40 @@
+# 平台 PostgreSQL。独立 project，不再挂在 Casdoor 下。
+#
+# 前置：共享网络已存在（bash scripts/bootstrap-network.sh），否则 up 会报 network not found。
+# 启动：docker compose -f deploy/postgres/docker-compose.yml up -d
+#
+# 卷名显式写死：Docker 会按 project 名推导卷名，改 project 时若不显式声明
+# 就会静默创建一个空卷，表现为"数据没了"。见 docs/decisions/0002-postgres-platform.md。
+
+name: pandabase
+
+services:
+  postgres:
+    image: postgres:17-bookworm
+    container_name: pandabase-postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # 仅在新卷首次 initdb 时生效；已有数据卷不看这几项
+      POSTGRES_DB: postgres
+      LANG: C.UTF-8
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - pandabase
+    # 不发布端口：PG 只在 pandabase 网络内可达
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata:
+    name: pandabase_pgdata
+
+networks:
+  pandabase:
+    external: true

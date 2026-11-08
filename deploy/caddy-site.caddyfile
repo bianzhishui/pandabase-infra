@@ -1,0 +1,40 @@
+# 共享宿主机用的站点配置片段。
+#
+# 适用场景：这台机器上已有 Caddy（systemd）在服务别的站点，不能把 80/443 让给容器。
+# 做法：把下面的块追加到 /etc/caddy/Caddyfile，validate 后 reload。
+#
+#   sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak-$(date +%F)
+#   sudo tee -a /etc/caddy/Caddyfile < deploy/caddy-site.caddyfile
+#   sudo caddy validate --config /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+#
+# Caddy 的全局 email 只能出现在文件最前面。宿主配置里没有的话加：
+#   {
+#       email admin@pandabase.top
+#   }
+
+# ---------------------------------------------------------------------------
+# 授权服务器。issuer 一旦对外签发令牌就不可更改（见 docs/decisions/0003）。
+# ---------------------------------------------------------------------------
+auth.pandabase.top {
+	reverse_proxy 127.0.0.1:8001
+}
+
+# ---------------------------------------------------------------------------
+# 业务站点示例。每接一个业务，复制这一段并改域名与上游端口。
+# 上游是业务容器绑在回环上的端口，不是容器内端口。
+# ---------------------------------------------------------------------------
+baiduads.pandabase.top {
+	encode zstd gzip
+
+	# 探活不鉴权：容器 HEALTHCHECK、外部监控、排障都要能直接打到
+	handle /healthz {
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	handle {
+		# 反代不做鉴权：令牌校验在业务进程内完成。
+		# 默认不缓冲，Streamable HTTP 的长连接可以直接穿透。
+		reverse_proxy 127.0.0.1:8000
+	}
+}

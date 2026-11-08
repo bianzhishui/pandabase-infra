@@ -1,0 +1,37 @@
+# Casdoor。它是平台的授权服务器，不是业务负载。
+#
+# 与 PG 分属两个 project：跨 project 没有 depends_on，启动顺序靠人（先 PG 后本服务），
+# 容器用 restart: unless-stopped 兜底——连不上库就退出重启，直到 PG 就绪。
+#
+# 启动：docker compose -f deploy/casdoor/docker-compose.yml up -d
+
+name: pandabase-casdoor
+
+services:
+  casdoor:
+    image: casbin/casdoor:latest
+    container_name: pandabase-casdoor
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      driverName: postgres
+      dataSourceName: "user=${POSTGRES_USER} password=${POSTGRES_PASSWORD} host=pandabase-postgres port=5432 dbname=casdoor sslmode=disable"
+      # 必须与 JWT 里的 iss 完全一致，且一旦启用不可更改（见 docs/decisions/0003）
+      origin: ${CASDOOR_ORIGIN}
+      runmode: prod
+    volumes:
+      - casdoor_data:/var/lib/casdoor
+    ports:
+      # 管理台只绑回环：公网入口只有宿主 Caddy 的 auth 子域
+      - "127.0.0.1:8001:8000"
+    networks:
+      - pandabase
+
+volumes:
+  casdoor_data:
+    name: pandabase_casdoor_data
+
+networks:
+  pandabase:
+    external: true
