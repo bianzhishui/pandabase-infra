@@ -34,11 +34,12 @@ curl -fsS https://auth.pandabase.top/.well-known/openid-configuration | head -c 
 |---|---|
 | `deploy/postgres/` | 平台 PostgreSQL（独立 compose project） |
 | `deploy/casdoor/` | 身份服务，连平台 PG 的 `casdoor` 库 |
+| `deploy/dbx/` | 只读数据库控制台，只绑回环，走 SSH 隧道 |
 | `deploy/Caddyfile`、`deploy/caddy-site.caddyfile` | 专用宿主机（容器版）与共享宿主机（片段）两份配置 |
 | `scripts/` | 建网、建库建角色、备份、项目改名迁移 |
-| `docs/decisions/` | ADR：仓库边界、PG 平台化、身份 |
+| `docs/decisions/` | ADR：仓库边界、PG 平台化、身份、DBX |
 | `docs/contract.md` | **唯一的耦合面**：业务接进来需要知道的一切 |
-| `docs/postgres.md`、`docs/identity.md`、`docs/edge.md` | 三套组件的运维细节 |
+| `docs/postgres.md`、`docs/identity.md`、`docs/edge.md`、`docs/dbx.md` | 各组件的运维细节 |
 | `docs/workload-onboarding.md` | 新业务接入检查单 |
 
 ## 与业务仓库的关系
@@ -63,6 +64,7 @@ pandabase-infra  ──提供──▶  网络 · 库/角色/DSN · Casdoor 应�
 | PostgreSQL | 17.11（`postgres:17-bookworm`），project `pandabase`，容器 `pandabase-postgres`，卷 `pandabase_pgdata`（48.7 MB），库 `casdoor` 10 MB |
 | 角色 | `pandabase_admin`（运维超管）/ `casdoor_app`（服务，非超管）/ `casdoor`（bootstrap，已 `NOLOGIN` 封存） |
 | Casdoor | `casbin/casdoor:latest`，project `pandabase-casdoor`，issuer `https://auth.pandabase.top` |
+| DBX | `t8y2/dbx:0.6.64`，project `pandabase-dbx`，`127.0.0.1:8002`，仅 SSH 隧道（见 `docs/dbx.md`） |
 | 边缘 | 宿主 Caddy（systemd），80/443；`baiduads` → `127.0.0.1:8000`，`auth` → `127.0.0.1:8001` |
 | 业务 | `mybmo-mcp`，仓库独立，模式 `oidc`，容器未被本次迁移重启 |
 | 迁移 | 2026-11-08 20:01 完成；旧 project、旧卷、目录副本已于 22:09 删除，回滚只剩 `backups/` 里的 dump 与整卷 tar |

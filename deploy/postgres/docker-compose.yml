@@ -40,6 +40,9 @@ services:
       - ./pg-entrypoint.sh:/usr/local/bin/pg-entrypoint.sh:ro
     networks:
       - pandabase
+      # 只给 DBX 用的侧门（见 docs/decisions/0004）：业务容器不在这个网络上，
+      # 因此业务被攻破也连不到数据库控制台。改这里要重建 PG —— 是变更窗口动作。
+      - pandabase-ops
     # 只绑回环：给宿主上的 SSH 隧道 / DBX 用，公网仍然摸不到。
     # 千万别写成 "5432:5432"——那是绑 0.0.0.0，而 PG 自己 ssl=off，等于明文对全网开放。
     ports:
@@ -58,4 +61,6 @@ volumes:
 
 networks:
   pandabase:
+    external: true
+  pandabase-ops:
     external: true

@@ -1,0 +1,52 @@
+# DBX 数据库控制台。运维 UI，不是业务负载（见 docs/decisions/0004）。
+#
+# 只挂 pandabase-ops：业务容器所在的 pandabase 网络上没有它，业务被攻破也够不到 4224。
+# 不暴露公网，只绑回环；从自己的机器用 SSH 隧道访问（见 docs/dbx.md）。
+#
+# 前置：pandabase-ops 已存在（bash scripts/bootstrap-network.sh），且 PG 已加入该网络。
+# 启动：docker compose -f deploy/dbx/docker-compose.yml up -d
+
+name: pandabase-dbx
+
+services:
+  dbx:
+    # 钉版本：DBX 几乎日更，latest + pull_policy: always 等于每天都换一个数据库控制台。
+    # 升级当变更做，升级前先在桌面版把同一套操作跑一遍。
+    image: t8y2/dbx:0.6.64
+    container_name: pandabase-dbx
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # 卷里同时有 dbx.db 与 .dbx/secret.key：拿到卷约等于拿到库口令，所以禁止回看
+      DBX_DISABLE_PASSWORD_VIEWER: "1"
+      # 没有公网入口，验证码降级为「失败后再出」，少一步
+      DBX_WEB_CAPTCHA: auto
+      # 默认 1024 MB：2C2G 上跑一次大导入能同时打穿内存和磁盘
+      DBX_MAX_UPLOAD_MB: "64"
+    volumes:
+      - dbx_data:/app/data
+    ports:
+      # 只绑回环：公网不开放，本机通过 SSH 隧道访问
+      - "127.0.0.1:8002:4224"
+    networks:
+      - pandabase-ops
+    # 与 Casdoor/PG 共用 2C2G；JDBC 驱动会拉 JVM，不设上限容易把机器拖进 swap
+    mem_limit: 512m
+    logging:
+      # 小盘机器：不让容器日志无限长
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # 健康探针不开：镜像里没有 curl/wget（实测），用宿主 curl 探 /api/auth/check。
+    # 探针走容器内回环 127.0.0.1:4224，不经过任何反代。
+
+volumes:
+  dbx_data:
+    # 显式写死：否则改 project 名会静默新建空卷（同 ADR 0002 第 4 条）
+    name: pandabase_dbx_data
+
+networks:
+  pandabase-ops:
+    external: true
