@@ -65,6 +65,7 @@ pandabase-infra  ──提供──▶  网络 · 库/角色/DSN · Casdoor 应�
 | 角色 | `pandabase_admin`（运维超管）/ `casdoor_app`（服务，非超管）/ `casdoor`（bootstrap，已 `NOLOGIN` 封存） |
 | Casdoor | `casbin/casdoor:latest`，project `pandabase-casdoor`，issuer `https://auth.pandabase.top` |
 | DBX | `t8y2/dbx:0.6.64`，project `pandabase-dbx`，`127.0.0.1:8002`，仅 SSH 隧道（见 `docs/dbx.md`） |
+| DBX MCP | `https://auth.pandabase.top/api/server/built-in/dbx`，Casdoor 网关，只读工具 |
 | 边缘 | 宿主 Caddy（systemd），80/443；`baiduads` → `127.0.0.1:8000`，`auth` → `127.0.0.1:8001` |
 | 业务 | `mybmo-mcp`，仓库独立，模式 `oidc`，容器未被本次迁移重启 |
 | 迁移 | 2026-11-08 20:01 完成；旧 project、旧卷、目录副本已于 22:09 删除，回滚只剩 `backups/` 里的 dump 与整卷 tar |

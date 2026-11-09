@@ -58,3 +58,10 @@
 - 业务数 ≥ 5 且需要单点登录之外的差异化策略（组织、计费、审计分级）
 - 需要 OIDC 之外的能力（SAML、SCIM、多因素强制）
 - Casdoor 出现无法绕过的安全公告且无补丁 → 换 IdP 时业务侧不应改代码（只需换 issuer/audience/JWKS）
+
+## 修订（2026-11-09）
+
+built-in 组织为 Casdoor MCP 网关开启 DCR/CIMD（`dcr_policy=public`），
+让 Claude/Cursor/VS Code 能注册或使用 URL client_id。业务 MCP 应用仍不使用 DCR，
+本 ADR 第 4 条的结论对业务侧不变。例外的前提、工具白名单与撤销方式见
+[ADR 0004](0004-dbx-console.md)。

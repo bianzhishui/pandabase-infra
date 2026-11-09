@@ -17,6 +17,7 @@
 | 业务容器 | `127.0.0.1:8000` | 仅回环 |
 | Casdoor | `127.0.0.1:8001` | 仅回环（管理台） |
 | DBX 控制台 | `127.0.0.1:8002` | 仅回环（SSH 隧道；**不接 Caddy**，见 `docs/dbx.md`） |
+| DBX MCP | `https://auth.pandabase.top/api/server/built-in/dbx` | 公网，但先过 Casdoor 登录与工具白名单（只读） |
 | PostgreSQL | 容器网络内 `5432`；宿主 `127.0.0.1:5432` | 仅回环（SSH 隧道 / DBX 用，公网不可达） |
 
 ## 二、接入一个站点
@@ -39,8 +40,10 @@ Caddy 的全局 `email` 只能出现在文件最前面；宿主配置里没有�
 2. **反代不能缓冲。** Streamable HTTP 依赖即时刷新；Caddy 的 `reverse_proxy` 默认不缓冲，
    换 nginx 必须显式关 `proxy_buffering` 并调 `proxy_read_timeout`，否则表现为「连上了但一动不动」。
 3. **`/healthz` 不鉴权。** 容器 HEALTHCHECK、外部监控、排障都要能直接打到；它不返回账户与令牌。
-4. **DBX 不接公网。** 它只有共享口令、没有 OIDC 与审计，只绑 `127.0.0.1:8002`，
-   通过 SSH 隧道访问；不要给它加站点块（见 `docs/decisions/0004-dbx-console.md`）。
+4. **DBX UI 不接公网；DBX MCP 只经 Casdoor 网关。** UI 只有共享口令、没有 OIDC 与审计，
+   只绑 `127.0.0.1:8002`，通过 SSH 隧道访问；不要给它加站点块。MCP 入口是
+   `auth.pandabase.top/api/server/built-in/dbx`，由 Casdoor 校验令牌并注入上游 token，
+   见 `docs/decisions/0004-dbx-console.md`。
 
 ## 四、证书
 

@@ -9,7 +9,8 @@
 |---|---|---|
 | issuer | `https://auth.pandabase.top` | 写进每个 JWT 的 `iss`；改一次 = 所有令牌失效 + 所有客户端重配 |
 | 授权服务器实例 | 同一个 Casdoor | 多实例意味着多套 issuer，业务要同时信任多个 |
-| DCR | `disabled` | 见下 |
+| DCR | 业务应用 `disabled`；built-in 组织 `public`（仅 Casdoor MCP 网关） | 见下 |
+| `client_id_metadata_document_supported` | 开启 built-in DCR 后为 `true` | MCP 客户端可用 URL 当 client_id；业务应用仍手工注册 |
 
 管理台只绑 `127.0.0.1:8001`，公网只经宿主 Caddy 暴露 `auth` 子域。
 **不要**把 `8000`/`8001` 直接映射到 `0.0.0.0`。
@@ -21,8 +22,8 @@
 | `aud` 是 client_id | 令牌里 `aud: ["60fda1..."]`，不是资源地址 | 业务侧把 audience 当**白名单**用；配成资源地址会全部 401 |
 | JWKS 路径 | `/.well-known/jwks`（不是 `{issuer}/api/v1/jwks`） | 业务侧必须显式配 `*_JWKS_URL`，不要靠推导 |
 | scope 是对象数组 | `[{"name":"baidu:read",...}]` | 写成 `["baidu:read"]` 会 `json: cannot unmarshal string into ... ScopeItem` |
-| DCR 没有白名单/限流 | `POST /api/oauth/register` 接受任意 `redirect_uris` | 保持 `disabled`；客户端逐个显式注册 |
-| `client_id_metadata_document_supported` | `false` | 客户端不能用 URL 当 client_id，只能手工建应用 |
+| DCR 没有白名单/限流 | `POST /api/oauth/register` 接受任意 `redirect_uris` | 业务应用保持 `disabled`；built-in 仅为 Casdoor MCP 网关开启（见 ADR 0004） |
+| `client_id_metadata_document_supported` | `true`（built-in 的 `dcr_policy=public`） | MCP 客户端可用 URL client_id；业务应用仍手工注册 |
 
 复核命令：
 
@@ -31,6 +32,10 @@ curl -fsS https://auth.pandabase.top/.well-known/openid-configuration \
   | python3 -m json.tool | grep -E 'issuer|jwks_uri|registration_endpoint|client_id_metadata'
 curl -fsS https://auth.pandabase.top/.well-known/jwks | head -c 200
 ```
+
+> **built-in 组织的 `dcr_policy=public` 只为 Casdoor MCP 网关服务**（见 `docs/dbx.md`）。
+> 业务应用不在 built-in，因此业务侧「不用 DCR」的结论不变；关掉它会让 Claude/Cursor
+> 等 MCP 客户端无法注册，但不会影响业务令牌的 audience 模型。
 
 ## 三、当前应用清单
 

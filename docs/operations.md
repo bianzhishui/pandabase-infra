@@ -35,6 +35,8 @@ curl -fsS https://auth.pandabase.top/.well-known/openid-configuration | head -c 
 curl -fsS https://baiduads.pandabase.top/healthz
 # DBX 只在回环：用宿主 curl 探，不经过任何反代
 curl -fsS http://127.0.0.1:8002/api/auth/check
+# Casdoor MCP 网关：未登录应 401（不是 502）
+curl -s -o /dev/null -w 'dbx mcp gateway: %{http_code}\n' -X POST https://auth.pandabase.top/api/server/built-in/dbx
 ```
 
 日志：
@@ -70,6 +72,9 @@ bash scripts/pg-backup.sh
 | PG 起不来 | 卷的 `PG_VERSION` 与镜像不匹配 | 别反复重启；按 `docs/postgres.md` 的升级/回滚处理 |
 | DBX 打不开 | SSH 隧道没开 / 8002 没监听 | 重开隧道；`ss -ltnp \| grep 8002`、`docs/dbx.md` |
 | DBX 连接 timeout | DBX 或 PG 不在 `pandabase-ops` | `docker network inspect pandabase-ops` 应同时有两者 |
+| DBX MCP 502 | Casdoor 够不到 DBX / Host 白名单不符 | 从 Casdoor 容器 `curl http://pandabase-dbx:4224/mcp`；查 `DBX_WEB_MCP_ALLOWED_HOSTS` |
+| DBX MCP 401 | 正常（未登录）；登录后仍 401 查 application / 权限 | Casdoor 的 `built-in/dbx` server、`app-built-in`、用户组织 |
+| DBX MCP 工具被拒 | 工具不在 Casdoor 的 allowlist | Casdoor `MCP Servers → dbx` 点 Sync，把需要的工具设为 allowed |
 
 ## 五、变更窗口
 
@@ -87,8 +92,9 @@ bash scripts/pg-backup.sh
 | 机器 | 49.232.229.71，2C2G |
 | PostgreSQL | 17.11，`postgres:17-bookworm`，卷 `pandabase_pgdata`（迁移后） |
 | Casdoor | `casbin/casdoor:latest`，`pandabase-casdoor`，端口 `127.0.0.1:8001` |
-| DBX | `t8y2/dbx:0.6.64`，`pandabase-dbx`，端口 `127.0.0.1:8002`（仅 SSH 隧道） |
-| 网络 | `pandabase`（业务/身份/PG）、`pandabase-ops`（PG/DBX），均为 external |
+| DBX | `t8y2/dbx:0.6.64`，`pandabase-dbx`，端口 `127.0.0.1:8002`（UI 仅 SSH 隧道） |
+| DBX MCP | `https://auth.pandabase.top/api/server/built-in/dbx`（Casdoor 网关，只读） |
+| 网络 | `pandabase`（业务/身份/PG）、`pandabase-ops`（PG/DBX/Casdoor），均为 external |
 | 备份 | `backups/`，每日 |
 
 待办：
