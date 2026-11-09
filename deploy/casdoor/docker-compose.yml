@@ -4,6 +4,12 @@
 # 容器用 restart: unless-stopped 兜底——连不上库就退出重启，直到 PG 就绪。
 #
 # 启动：docker compose -f deploy/casdoor/docker-compose.yml up -d
+#
+# 落盘位置（上游标准镜像的 WORKDIR 是 /）：
+#   配置 /conf/app.conf   ← 从仓库只读挂入（本文件不含口令，连接参数由 environment 注入）
+#   日志 /logs            ← 独立卷（Beego file adapter 写 logs/casdoor.log）
+#   上传 /files           ← 暂未使用，需要时再加卷
+#   /var/lib/casdoor      ← 上游镜像当前不使用；保留空卷仅作兼容
 
 name: pandabase-casdoor
 
@@ -22,6 +28,10 @@ services:
       runmode: prod
     volumes:
       - casdoor_data:/var/lib/casdoor
+      # 配置：仓库里的 app.conf 只读挂入；改完重启容器生效
+      - ./conf/app.conf:/conf/app.conf:ro
+      # 日志：独立卷，容器重建不丢
+      - casdoor_logs:/logs
     ports:
       # 管理台只绑回环：公网入口只有宿主 Caddy 的 auth 子域
       - "127.0.0.1:8001:8000"
@@ -31,6 +41,8 @@ services:
 volumes:
   casdoor_data:
     name: pandabase_casdoor_data
+  casdoor_logs:
+    name: pandabase_casdoor_logs
 
 networks:
   pandabase:
