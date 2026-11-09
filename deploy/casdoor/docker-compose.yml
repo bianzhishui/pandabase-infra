@@ -37,6 +37,8 @@ services:
       - "127.0.0.1:8001:8000"
     networks:
       - pandabase
+      # MCP 网关需要够到 pandabase-dbx；业务容器仍不在该网络（见 ADR 0004）
+      - pandabase-ops
 
 volumes:
   casdoor_data:
@@ -46,4 +48,6 @@ volumes:
 
 networks:
   pandabase:
+    external: true
+  pandabase-ops:
     external: true

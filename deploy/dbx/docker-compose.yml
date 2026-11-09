@@ -24,6 +24,10 @@ services:
       DBX_WEB_CAPTCHA: auto
       # 默认 1024 MB：2C2G 上跑一次大导入能同时打穿内存和磁盘
       DBX_MAX_UPLOAD_MB: "64"
+      # MCP HTTP：Casdoor 网关用 Bearer token 代理进来；部署托管后页面只读
+      DBX_WEB_MCP_TOKEN: ${DBX_MCP_TOKEN}
+      # 上游 Host 白名单；Casdoor 转发时不改 Host，按容器名匹配
+      DBX_WEB_MCP_ALLOWED_HOSTS: ${DBX_MCP_ALLOWED_HOSTS:-pandabase-dbx:4224}
     volumes:
       - dbx_data:/app/data
     ports:
