@@ -34,10 +34,13 @@
 
 | 库 | 属主 | 用途 | 当前大小 |
 |---|---|---|---|
-| `casdoor` | `casdoor` | Casdoor 的账号、应用、证书、scope | 10 MB |
-| `postgres` | `pandabase_admin` | 维护库 | 7.5 MB |
+| `casdoor` | `casdoor_app` | Casdoor 的账号、应用、证书、scope | 11 MB |
+| `postgres` | `casdoor`（bootstrap 超级用户） | 维护库；属主仍是 initdb 建的超管，未随迁移转移 | 7478 kB |
 
 新业务接入时由 `pg-provision.sh` 追加一行，并同步登记到 `docs/workload-onboarding.md` 的清单里。
+
+卷：数据 `pandabase_pgdata`（66 MB）；日志 `pandabase_pglogs` 挂 `/var/log/postgresql`，
+容器重建不丢，但不进 PG 备份（备份只覆盖数据卷里的库）。
 
 ## 三、备份
 

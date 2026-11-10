@@ -3,7 +3,7 @@
 - 状态：已接受
 - 日期：2026-11-08
 - 决策者：项目负责人
-- 关联：业务仓库 `docs/decisions/0002-tech-stack.md`（D6 反代不做鉴权）、`0003-capability-only.md`
+- 关联：业务仓库 `docs/decisions/0002-tech-stack.md`、`0003-capability-only.md`、`docs/auth-contract.md`（反代不做鉴权）
 
 ## 背景
 
@@ -33,7 +33,7 @@
 | 单仓库多目录（`apps/` + `platform/`） | 权限与发布节奏无法分离；一次 infra 变更会触发业务 CI |
 | git submodule 把 infra 挂在业务下 | 部署机要处理两套 remote 与 submodule 状态；新人上手成本高 |
 | infra 提供共享 Python 包（鉴权/审计） | 业务被 infra 的发布节奏绑住；且鉴权必须在业务进程内完成 |
-| 反代统一鉴权（Envoy ext_authz / oauth2-proxy） | 与 ADR 0002 D6 冲突：反代注入的头可被直连回环伪造，等于留后门 |
+| 反代统一鉴权（Envoy ext_authz / oauth2-proxy） | 与「反代不做鉴权」冲突（见 `docs/edge.md` 第三节）：反代注入的头可被直连回环伪造，等于留后门 |
 
 ## 后果
 

@@ -88,3 +88,10 @@ PostgreSQL 走原生驱动（不拉 JRE）、支持只读连接与生产保护�
 - DBX 支持 OIDC → 去掉 UI 共享口令，ADR 的「共享口令」部分失效
 - DCR 出现滥用（大量 `dcr_` 应用）→ 关闭 built-in DCR，改为手工注册客户端
 - Casdoor 网关支持按工具/参数更细的策略 → 把 DBX 的 7 个工具再收窄
+
+## 修订（2026-11-10）：实施偏差
+
+第 4、6 条的目标状态不变，但当前实际配置与之不符：MCP 策略的连接白名单指向
+`pandabase`（`pandabase_admin`，实例级超管），而不是只读连接
+`pandabase-casdoor (read-only)`（`dbx_read`）。只读仍由 DBX 的 `readOnly` 策略兜住，
+但账号权限面比设计大。收紧动作见 `docs/dbx.md`「五、安全边界」末条。

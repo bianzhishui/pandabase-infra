@@ -64,7 +64,8 @@ DBX Web 自带 Streamable HTTP MCP。它不直接暴露，只让 Casdoor 的 MCP
 | 上游 Host 白名单 | `pandabase-dbx:4224` |
 | 网关 URL | `https://auth.pandabase.top/api/server/built-in/dbx` |
 | Casdoor 记录 | `built-in/dbx`，application `app-built-in` |
-| 权限 | 只读；只允许 `pandabase-casdoor (read-only)` 连接；7 个读工具 |
+| 权限 | 只读（`readOnly=true`、`allowDangerousSql=false`）；工具白名单 7 个 |
+| 连接白名单 | ⚠️ 实测指向 `pandabase`（用户 `pandabase_admin`，实例级超管），**不是**只读连接——见「五、安全边界」末条 |
 
 客户端配置：
 
@@ -120,9 +121,10 @@ curl -sS -b <cookie> http://127.0.0.1:8002/api/app-settings/mcp-http-status
 > 存在 Casdoor 的 PostgreSQL 里，不在 git。换库或重建 Casdoor 后，需要在
 > **LLM AI → MCP Servers** 重新添加并点 **Sync**，同时把 built-in 的 DCR 打开。
 
-> DBX UI 里可能有一条用 `pandabase_admin` 的连接（人工排障用）。
-> MCP 策略只允许 `pandabase-casdoor (read-only)`，所以 MCP 客户端看不到它，
-> 也调不动它。不要把管理员连接加进 MCP allowlist。
+> UI 里现在有两条连接：`pandabase`（`pandabase_admin`）与
+> `pandabase-casdoor (read-only)`（`dbx_read`）。**2026-11-10 实测：MCP 的
+> `allowedConnectionIds` 放的是前者**，即 MCP 客户端看到的正是管理员连接。
+> 这与 ADR 0004 第 4/6 条的目标状态相反，收紧方式见下一节末条。
 
 ## 四、启停与检查
 
@@ -157,6 +159,12 @@ curl -s -o /dev/null -w '%{http_code}\n' --max-time 5 https://dbx.pandabase.top/
   业务网络。
 - **MCP 只放只读连接**。UI 里的管理员连接保留给人工排障，不要加进 MCP allowlist。
 - **相当于是两层账号**：Casdoor 决定谁能进网关，`dbx_read` 决定能读哪些表。
+- ⚠️ **与设计的偏差（2026-11-10 实测，未修）**：MCP 策略的连接白名单是
+  `pandabase`（`pandabase_admin`，实例级超管），只读连接 `pandabase-casdoor (read-only)`
+  不在名单里。只读仍由 DBX 的 `readOnly` 策略兜住，但账号可读全部库（含 `pg_authid`），
+  第二层「`dbx_read` 决定能读哪些表」实际没生效。收紧：把 `allowedConnectionIds` 与
+  `mcp_access_policy` 里的连接换成 `23908e67-aa69-4a15-8919-4c527d280db3`
+  （`pandabase-casdoor (read-only)`），或在 UI 的 Settings → MCP 里换。
 - 卷 `pandabase_dbx_data` 里有连接口令的加密密钥，**不进异地备份**。
 
 ## 六、升级

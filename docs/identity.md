@@ -23,7 +23,6 @@
 | JWKS 路径 | `/.well-known/jwks`（不是 `{issuer}/api/v1/jwks`） | 业务侧必须显式配 `*_JWKS_URL`，不要靠推导 |
 | scope 是对象数组 | `[{"name":"baidu:read",...}]` | 写成 `["baidu:read"]` 会 `json: cannot unmarshal string into ... ScopeItem` |
 | DCR 没有白名单/限流 | `POST /api/oauth/register` 接受任意 `redirect_uris` | 业务应用保持 `disabled`；built-in 仅为 Casdoor MCP 网关开启（见 ADR 0004） |
-| `client_id_metadata_document_supported` | `true`（built-in 的 `dcr_policy=public`） | MCP 客户端可用 URL client_id；业务应用仍手工注册 |
 
 复核命令：
 
@@ -41,8 +40,9 @@ curl -fsS https://auth.pandabase.top/.well-known/jwks | head -c 200
 
 | 应用 | client_id | grant_types | redirect_uris | 用途 |
 |---|---|---|---|---|
-| `mybmo-mcp` | `709a8e16656a223a1ab7` | `authorization_code` + `refresh_token` | **待填** | 业务专用（2026-11-08 建） |
-| `app-built-in` | `60fda1d9bedd4615eb90` | `authorization_code` + `refresh_token` | 空 | Casdoor 自带示例，**password grant 已于 2026-11-08 关闭**；业务白名单里暂留它的 id 作为回滚退路 |
+| `mybmo-mcp` | `709a8e16656a223a1ab7` | `authorization_code` + `refresh_token` | `https://auth.pandabase.top/apps`、`http://127.0.0.1:33418/callback` | 业务专用（2026-11-08 建）；33418 是 `scripts/verify-oauth.py` 的本地回调 |
+| `app-built-in` | `60fda1d9bedd4615eb90` | `authorization_code` + `refresh_token` | 空 | Casdoor 自带示例，**password grant 已于 2026-11-08 关闭**；已不在任何业务的白名单里 |
+| `dcr_*`（当前 3 个） | 客户端自助注册 | `authorization_code` + `refresh_token` | `http://localhost:<port>/oauth/callback` | MCP 客户端经 built-in DCR 注册（见 ADR 0004）；需定期清理 |
 
 新应用是从 `app-built-in` 复制出来的（scope 数组一并带过来），
 client_secret 在 Casdoor 控制台 `Applications → mybmo-mcp` 里查看，不要写进仓库。
@@ -50,6 +50,9 @@ client_secret 在 Casdoor 控制台 `Applications → mybmo-mcp` 里查看，不
 > **`redirect_uris` 为空意味着授权码流程走不通。** 接具体客户端前必须把该客户端的
 > 固定回调填进去（例：`https://claude.ai/api/mcp/auth_callback`），一个客户端一个 URI。
 > 填完不需要重启 Casdoor，重新发起登录即可。
+>
+> `mybmo-mcp` 的 `https://auth.pandabase.top/apps` 是建应用时 UI 带上的 Casdoor 自身路径，
+> 与业务无关，确认没用后可删（授权码流程实际走 33418 回调）。
 
 ## 四、新增一个业务（一业务一 application）
 

@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/logo1.webp" alt="pandabase" width="160"></p>
+
 # pandabase-infra
 
 pandabase 系列业务的共享底座：域名与 TLS、身份（Casdoor）、数据库（PostgreSQL）、容器网络、
@@ -37,6 +39,8 @@ curl -fsS https://auth.pandabase.top/.well-known/openid-configuration | head -c 
 | `deploy/dbx/` | 只读数据库控制台，只绑回环，走 SSH 隧道 |
 | `deploy/Caddyfile`、`deploy/caddy-site.caddyfile` | 专用宿主机（容器版）与共享宿主机（片段）两份配置 |
 | `scripts/` | 建网、建库建角色、备份、项目改名迁移 |
+| `assets/` | 品牌图与头像（`logo1-4`、`user1-6`，512/200 WebP）；**仍带「即梦AI」水印，对外使用前需换无水印源图** |
+| `openspec/project.md` | 项目定位与边界，供 openspec 工具链读取 |
 | `docs/decisions/` | ADR：仓库边界、PG 平台化、身份、DBX |
 | `docs/contract.md` | **唯一的耦合面**：业务接进来需要知道的一切 |
 | `docs/postgres.md`、`docs/identity.md`、`docs/edge.md`、`docs/dbx.md` | 各组件的运维细节 |
@@ -56,21 +60,21 @@ pandabase-infra  ──提供──▶  网络 · 库/角色/DSN · Casdoor 应�
 - 业务仓库**不引用** infra 的 `deploy/` 或文档路径；它只需要 `docs/contract.md` 里公布的值
 - 唯一例外：`scripts/` 里的一次性迁移脚本会操作业务容器，跑完即废弃
 
-## 现状（2026-11-08）
+## 现状（2026-11-10 实测）
 
 | 项 | 值 |
 |---|---|
 | 机器 | 49.232.229.71，2C2G，Ubuntu |
-| PostgreSQL | 17.11（`postgres:17-bookworm`），project `pandabase`，容器 `pandabase-postgres`，卷 `pandabase_pgdata`（48.7 MB），库 `casdoor` 10 MB |
-| 角色 | `pandabase_admin`（运维超管）/ `casdoor_app`（服务，非超管）/ `casdoor`（bootstrap，已 `NOLOGIN` 封存） |
+| PostgreSQL | 17.11（`postgres:17-bookworm`），project `pandabase`，容器 `pandabase-postgres`，卷 `pandabase_pgdata`（66 MB）+ `pandabase_pglogs`，库 `casdoor` 11 MB |
+| 角色 | `pandabase_admin`（运维超管）/ `casdoor_app`（服务，非超管）/ `dbx_read`（DBX 只读）/ `casdoor`（bootstrap，已封存） |
 | Casdoor | `casbin/casdoor:latest`，project `pandabase-casdoor`，issuer `https://auth.pandabase.top` |
 | DBX | `t8y2/dbx:0.6.64`，project `pandabase-dbx`，`127.0.0.1:8002`，仅 SSH 隧道（见 `docs/dbx.md`） |
-| DBX MCP | `https://auth.pandabase.top/api/server/built-in/dbx`，Casdoor 网关，只读工具 |
+| DBX MCP | `https://auth.pandabase.top/api/server/built-in/dbx`，Casdoor 网关，只读工具 7 个（⚠️ 连接白名单当前指向超管账号，见 `docs/dbx.md`） |
 | 边缘 | 宿主 Caddy（systemd），80/443；`baiduads` → `127.0.0.1:8000`，`auth` → `127.0.0.1:8001` |
-| 业务 | `mybmo-mcp`，仓库独立，模式 `oidc`，容器未被本次迁移重启 |
+| 业务 | `mybmo-mcp`（镜像 `mybmo-mcp:0.1.0`，`127.0.0.1:8000`，卷 `mybmo_data`），仓库独立，模式 `oidc` |
+| 网络 | `pandabase`（业务 / PG / Casdoor）、`pandabase-ops`（PG / DBX / Casdoor） |
 | 迁移 | 2026-11-08 20:01 完成；旧 project、旧卷、目录副本已于 22:09 删除，回滚只剩 `backups/` 里的 dump 与整卷 tar |
-| 业务 | `mybmo-mcp`，仓库独立，模式 `oidc` |
-| 待办 | PG 仍在旧 project `mybmo-casdoor` 下，改名与降权见 `docs/postgres.md` 的迁移章节 |
+| 待办 | 令牌 168h 偏长、备份未上 cron 与异地、`/healthz` 无外部监控（详见 `docs/operations.md`） |
 
 ## 不做
 

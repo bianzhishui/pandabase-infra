@@ -3,7 +3,7 @@
 - 状态：已接受
 - 日期：2026-11-08
 - 决策者：项目负责人
-- 关联：[ADR 0001](0001-repo-boundary.md)、业务仓库 `docs/decisions/0001-auth-architecture.md`、`0006-casdoor-audience.md`、`0007-no-dcr.md`
+- 关联：[ADR 0001](0001-repo-boundary.md)、业务仓库 `docs/auth-contract.md`（鉴权不变量）、`docs/decisions/0003-capability-only.md`
 
 ## 背景
 
@@ -19,7 +19,7 @@
    所以域名必须在第一天就定死。
 3. **一业务一 application**。每个业务有自己的 `client_id`、自己的 scope 命名空间
    （如 `baidu:read` / `baidu:write`）、自己的回调地址。新增业务不改动既有业务。
-4. **DCR 保持关闭**，客户端逐个显式注册。实测（见业务仓库 ADR 0007）：DCR 没有回调白名单、
+4. **DCR 保持关闭**，客户端逐个显式注册。实测（见业务仓库 `docs/auth-contract.md` 第三、四条）：DCR 没有回调白名单、
    没有限流，且它签出的令牌 `aud` 是新的 client_id，本来也调不动业务服务。
 5. **`aud` 是 client_id，不是资源地址**。这是 Casdoor 的实测行为，不是 RFC 8707 的语义。
    业务侧因此把 audience 当**白名单**用：每个允许调用它的客户端，把 client_id 加进去。

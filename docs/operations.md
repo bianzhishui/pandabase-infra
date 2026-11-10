@@ -90,7 +90,7 @@ bash scripts/pg-backup.sh
 | 项 | 值 |
 |---|---|
 | 机器 | 49.232.229.71，2C2G |
-| PostgreSQL | 17.11，`postgres:17-bookworm`，卷 `pandabase_pgdata`（迁移后） |
+| PostgreSQL | 17.11，`postgres:17-bookworm`，卷 `pandabase_pgdata`（66 MB）+ `pandabase_pglogs` |
 | Casdoor | `casbin/casdoor:latest`，`pandabase-casdoor`，端口 `127.0.0.1:8001` |
 | DBX | `t8y2/dbx:0.6.64`，`pandabase-dbx`，端口 `127.0.0.1:8002`（UI 仅 SSH 隧道） |
 | DBX MCP | `https://auth.pandabase.top/api/server/built-in/dbx`（Casdoor 网关，只读） |
