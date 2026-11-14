@@ -31,12 +31,12 @@ docker compose -f deploy/postgres/docker-compose.yml ps
 docker compose -f deploy/casdoor/docker-compose.yml ps
 docker compose -f deploy/dbx/docker-compose.yml ps
 docker exec pandabase-postgres psql -U pandabase_admin -d postgres -c '\l'
-curl -fsS https://auth.pandabase.top/.well-known/openid-configuration | head -c 80
-curl -fsS https://baiduads.pandabase.top/healthz
+curl -fsS https://auth.pandabase.top:8443/.well-known/openid-configuration | head -c 80
+curl -fsS https://baiduads.pandabase.top:8443/healthz
 # DBX 只在回环：用宿主 curl 探，不经过任何反代
 curl -fsS http://127.0.0.1:8002/api/auth/check
 # Casdoor MCP 网关：未登录应 401（不是 502）
-curl -s -o /dev/null -w 'dbx mcp gateway: %{http_code}\n' -X POST https://auth.pandabase.top/api/server/built-in/dbx
+curl -s -o /dev/null -w 'dbx mcp gateway: %{http_code}\n' -X POST https://auth.pandabase.top:8443/api/server/built-in/dbx
 ```
 
 日志：
@@ -67,7 +67,10 @@ bash scripts/pg-backup.sh
 | 某业务 401、其它正常 | 该业务的 client_id 不在自己白名单 / scope 未登记 | 查该业务 `AUDIENCE` 与 Casdoor 应用 |
 | 业务连不上库 | 不在 `pandabase` 网络 / 角色无权限 / DSN 错 | `docker exec pandabase-postgres psql -U <app> -d <app> -c 'select 1'` |
 | `too many connections for role` | 业务连接池开太大 | 调业务连接池；必要时调该角色 `CONNECTION LIMIT` |
-| 证书签发失败 | DNS 没有 A 记录 / 80 未放通 | `dig` + 安全组，别动容器 |
+| 客户端 `curl` 000 / `UNEXPECTED_EOF`，服务器侧 200，浏览器能开 | 未备案域名在 443 上按 SNI 被 RST | 确认 URL 带 `:8443`（ADR 0005）；不要为此改回 443 |
+| 8443 上也开始 000 | 拦截规则升级到非标端口 | 别再换端口，转境外 VPS 回源（ADR 0005「重新评估条件」） |
+| 证书快到期/握手报证书错误 | acme.sh 续期失败 | `sudo bash scripts/tls-wildcard.sh check`，再 `sudo ~/.acme.sh/acme.sh --cron`；看 `journalctl -u caddy` |
+| 证书签发失败 | DNS 没有 A 记录 / DNS API 凭据过期 | `sudo bash scripts/tls-wildcard.sh issue` 看 acme.sh 报错；别动容器 |
 | 502 | 业务容器没起 / 端口不对 | 查业务 compose，再查 Caddy 上游 |
 | PG 起不来 | 卷的 `PG_VERSION` 与镜像不匹配 | 别反复重启；按 `docs/postgres.md` 的升级/回滚处理 |
 | DBX 打不开 | SSH 隧道没开 / 8002 没监听 | 重开隧道；`ss -ltnp \| grep 8002`、`docs/dbx.md` |
@@ -93,7 +96,8 @@ bash scripts/pg-backup.sh
 | PostgreSQL | 17.11，`postgres:17-bookworm`，卷 `pandabase_pgdata`（66 MB）+ `pandabase_pglogs` |
 | Casdoor | `casbin/casdoor:latest`，`pandabase-casdoor`，端口 `127.0.0.1:8001` |
 | DBX | `t8y2/dbx:0.6.64`，`pandabase-dbx`，端口 `127.0.0.1:8002`（UI 仅 SSH 隧道） |
-| DBX MCP | `https://auth.pandabase.top/api/server/built-in/dbx`（Casdoor 网关，只读） |
+| 边缘 | **过渡态**：对外只有 `:8443`（443 保留、备案通过后切回，见 ADR 0005）；证书沿用 Caddy 托管的同名 LE 证书，2027-02-06 到期，切回 443 后自动续期 |
+| DBX MCP | `https://auth.pandabase.top:8443/api/server/built-in/dbx`（Casdoor 网关，只读） |
 | 网络 | `pandabase`（业务/身份/PG）、`pandabase-ops`（PG/DBX/Casdoor），均为 external |
 | 备份 | `backups/`，每日 |
 
@@ -111,5 +115,12 @@ bash scripts/pg-backup.sh
 - [x] DBX 恢复部署：独立 project、回环 `127.0.0.1:8002`、`pandabase-ops` 隔离、
       只读角色 `dbx_read`（2026-11-09，见 `docs/dbx.md`）
 - [ ] 令牌有效期 `expire_in_hours=168`（7 天）偏长，建议改 1 小时 + refresh
+- [ ] **备案通过后切回 443**（计划内，非可选）：清单见 ADR 0005「切回 443」；切之前先用公网 curl 验 443 已解除拦截
+- [ ] 仅当备案拖到 2027-01 之后才做：证书续期切 DNS-01（需 DNSPod 凭据），硬期限 2027-02-06
+- [x] ~~`MYBMO_BAIDU_CALLBACK_URL` 改 `:8443`~~ —— 不改：切回 443 后原值就是对的，
+      改了反而要在百度后台改两次。**这个值全程不动**
+- [ ] 重配 MCP 客户端（Claude Code / Cursor / VS Code）为 `:8443`，切回时再改回
+- [ ] 业务仓库（`mybmo-mcp`）的 README / auth-contract / .env.example 仍是旧值，待该仓库同步
+- [ ] 通配证书的续期结果纳入监控（续期失败时不会有人知道，直到握手报错）
 - [ ] 备份加 cron 与异地留存
 - [ ] `/healthz` 外部监控（当前只有容器 HEALTHCHECK）

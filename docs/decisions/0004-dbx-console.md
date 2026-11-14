@@ -95,3 +95,8 @@ PostgreSQL 走原生驱动（不拉 JRE）、支持只读连接与生产保护�
 `pandabase`（`pandabase_admin`，实例级超管），而不是只读连接
 `pandabase-casdoor (read-only)`（`dbx_read`）。只读仍由 DBX 的 `readOnly` 策略兜住，
 但账号权限面比设计大。收紧动作见 `docs/dbx.md`「五、安全边界」末条。
+
+## 修订（2026-11-14）
+
+网关 URL 随 issuer 一起加端口：`https://auth.pandabase.top:8443/api/server/built-in/dbx`
+（原因见 [ADR 0005](0005-alt-port-tls.md)）。MCP 网关、工具白名单、只读策略均不变。

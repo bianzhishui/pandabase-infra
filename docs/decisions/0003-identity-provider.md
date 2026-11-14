@@ -65,3 +65,11 @@ built-in 组织为 Casdoor MCP 网关开启 DCR/CIMD（`dcr_policy=public`），
 让 Claude/Cursor/VS Code 能注册或使用 URL client_id。业务 MCP 应用仍不使用 DCR，
 本 ADR 第 4 条的结论对业务侧不变。例外的前提、工具白名单与撤销方式见
 [ADR 0004](0004-dbx-console.md)。
+
+## 修订（2026-11-14）
+
+issuer 由 `https://auth.pandabase.top` 改为 `https://auth.pandabase.top:8443`：
+域名未备案，443 上的 TLS 被中间设备按 SNI 重置，对外入口挪到 8443。
+
+这是第 2 条「issuer 不可变」唯一被批准的例外，代价（令牌全废 + 客户端重配）与
+选择理由见 [ADR 0005](0005-alt-port-tls.md)。除端口外，本 ADR 其余结论不变。

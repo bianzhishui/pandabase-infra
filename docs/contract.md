@@ -11,10 +11,10 @@
 | PostgreSQL | `pandabase-postgres:5432` | 只在 `pandabase` 网络内可达；宿主回环另有 `127.0.0.1:5432`，仅供 SSH 隧道/DBX，**公网不可达** |
 | 业务库与角色 | `<app>` / 角色 `<app>` | 由 `scripts/pg-provision.sh` 建，最小权限、带连接数上限 |
 | DSN 模板 | `postgresql://<app>:<pwd>@pandabase-postgres:5432/<app>` | 口令由 infra 生成后一次性交付 |
-| 授权服务器 | `https://auth.pandabase.top` | issuer 不可变 |
-| JWKS | `https://auth.pandabase.top/.well-known/jwks` | 不要按 `{issuer}/api/v1/jwks` 推导 |
+| 授权服务器 | `https://auth.pandabase.top:8443` | issuer 不可变，**端口也算 issuer 的一部分**（ADR 0005）|
+| JWKS | `https://auth.pandabase.top:8443/.well-known/jwks` | 不要按 `{issuer}/api/v1/jwks` 推导 |
 | 每个业务的 client_id | Casdoor 应用 ID | 业务把它加进自己的 audience 白名单 |
-| TLS / 域名 | 宿主 Caddy | 业务只需提供域名与上游端口 |
+| TLS / 域名 | 宿主 Caddy，对外只有 `:8443` | 业务只需提供域名与上游端口；443 被备案拦截，客户端一律用 8443 |
 | 备份 | 见 `docs/postgres.md` | 新业务上线时必须确认已进备份范围 |
 
 ## 二、业务需要满足什么
@@ -33,10 +33,10 @@
 ```yaml
 # 业务自己的 compose 或 .env，变量名由业务决定；这里只是值
 MYBMO_AUTH_MODE: oidc
-CASDOOR_ISSUER: https://auth.pandabase.top
-MYBMO_JWKS_URL: https://auth.pandabase.top/.well-known/jwks
+CASDOOR_ISSUER: https://auth.pandabase.top:8443
+MYBMO_JWKS_URL: https://auth.pandabase.top:8443/.well-known/jwks
 MYBMO_OIDC_AUDIENCE: <该业务在 Casdoor 的 client_id>
-MYBMO_RESOURCE_URL: https://<该业务域名>
+MYBMO_RESOURCE_URL: https://<该业务域名>:8443
 MYBMO_DATABASE_URL: postgresql://<app>:<pwd>@pandabase-postgres:5432/<app>
 ```
 
@@ -48,7 +48,10 @@ MYBMO_DATABASE_URL: postgresql://<app>:<pwd>@pandabase-postgres:5432/<app>
 1. **业务镜像升级**：业务仓库自己 `up -d --build`，infra 不参与
 2. **infra 配置变更**（新增 client_id 白名单、DSN 轮换）：先改 infra，再通知业务重启
 3. **PG 大版本升级**：infra 主导，需全业务停机窗口，顺序见 `docs/postgres.md`
-4. **issuer 变更**：不允许。真要变更按「新建 IdP + 全业务迁移」处理，不是配置改动
+4. **issuer 变更**：默认不允许。真要变更按「新建 IdP + 全业务迁移」处理，不是配置改动。
+   唯一已批准的例外是 2026-11-14 加端口 `:8443`（未备案域名 443 被 RST），
+   过程见 `docs/decisions/0005-alt-port-tls.md`——这种变更**不会**有第二次免费机会，
+   再来一次就是全体客户端重新接入。
 
 ## 五、故障时的责任划分
 

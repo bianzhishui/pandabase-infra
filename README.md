@@ -24,11 +24,12 @@ docker compose -f deploy/postgres/docker-compose.yml up -d
 # 3. 身份
 cp deploy/casdoor/.env.example deploy/casdoor/.env       # 填库口令与 issuer
 docker compose -f deploy/casdoor/docker-compose.yml up -d
-curl -fsS https://auth.pandabase.top/.well-known/openid-configuration | head -c 80
+curl -fsS https://auth.pandabase.top:8443/.well-known/openid-configuration | head -c 80
 ```
 
-宿主 Caddy 的站点块见 `deploy/caddy-site.caddyfile`——追加到 `/etc/caddy/Caddyfile` 再 reload，
-不要另起容器（见 `docs/edge.md`）。
+宿主 Caddy 的站点块见 `deploy/caddy-alt-port.caddyfile`（对外走 8443，见 ADR 0005）——追加到
+`/etc/caddy/Caddyfile` 再 reload，不要另起容器（见 `docs/edge.md`）；443 的站点块留在
+`deploy/caddy-site.caddyfile`，仅服务器侧自测与备案后切回用。
 
 ## 目录
 
@@ -37,7 +38,8 @@ curl -fsS https://auth.pandabase.top/.well-known/openid-configuration | head -c 
 | `deploy/postgres/` | 平台 PostgreSQL（独立 compose project） |
 | `deploy/casdoor/` | 身份服务，连平台 PG 的 `casdoor` 库 |
 | `deploy/dbx/` | 只读数据库控制台，只绑回环，走 SSH 隧道 |
-| `deploy/Caddyfile`、`deploy/caddy-site.caddyfile` | 专用宿主机（容器版）与共享宿主机（片段）两份配置 |
+| `deploy/Caddyfile`、`deploy/caddy-site.caddyfile` | 专用宿主机（容器版）与共享宿主机 443 片段（保留待备案）|
+| `deploy/caddy-alt-port.caddyfile` | **对外实际入口**：共享宿主机 `:8443` 站点片段（未备案绕拦截）|
 | `scripts/` | 建网、建库建角色、备份、项目改名迁移 |
 | `assets/` | 品牌图与头像（`logo1-4`、`user1-6`，512/200 WebP）；**仍带「即梦AI」水印，对外使用前需换无水印源图** |
 | `openspec/project.md` | 项目定位与边界，供 openspec 工具链读取 |
@@ -67,10 +69,10 @@ pandabase-infra  ──提供──▶  网络 · 库/角色/DSN · Casdoor 应�
 | 机器 | 49.232.229.71，2C2G，Ubuntu |
 | PostgreSQL | 17.11（`postgres:17-bookworm`），project `pandabase`，容器 `pandabase-postgres`，卷 `pandabase_pgdata`（66 MB）+ `pandabase_pglogs`，库 `casdoor` 11 MB |
 | 角色 | `pandabase_admin`（运维超管）/ `casdoor_app`（服务，非超管）/ `dbx_read`（DBX 只读）/ `casdoor`（bootstrap，已封存） |
-| Casdoor | `casbin/casdoor:latest`，project `pandabase-casdoor`，issuer `https://auth.pandabase.top` |
+| Casdoor | `casbin/casdoor:latest`，project `pandabase-casdoor`，issuer `https://auth.pandabase.top:8443` |
 | DBX | `t8y2/dbx:0.6.64`，project `pandabase-dbx`，`127.0.0.1:8002`，仅 SSH 隧道（见 `docs/dbx.md`） |
-| DBX MCP | `https://auth.pandabase.top/api/server/built-in/dbx`，Casdoor 网关，只读工具 7 个（⚠️ 连接白名单当前指向超管账号，见 `docs/dbx.md`） |
-| 边缘 | 宿主 Caddy（systemd），80/443；`baiduads` → `127.0.0.1:8000`，`auth` → `127.0.0.1:8001` |
+| DBX MCP | `https://auth.pandabase.top:8443/api/server/built-in/dbx`，Casdoor 网关，只读工具 7 个（⚠️ 连接白名单当前指向超管账号，见 `docs/dbx.md`） |
+| 边缘 | 宿主 Caddy（systemd），**对外只有 8443**（443 保留待备案，见 ADR 0005）；`baiduads` → `127.0.0.1:8000`，`auth` → `127.0.0.1:8001` |
 | 业务 | `mybmo-mcp`（镜像 `mybmo-mcp:0.1.0`，`127.0.0.1:8000`，卷 `mybmo_data`），仓库独立，模式 `oidc` |
 | 网络 | `pandabase`（业务 / PG / Casdoor）、`pandabase-ops`（PG / DBX / Casdoor） |
 | 迁移 | 2026-11-08 20:01 完成；旧 project、旧卷、目录副本已于 22:09 删除，回滚只剩 `backups/` 里的 dump 与整卷 tar |

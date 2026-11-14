@@ -8,7 +8,7 @@
                                                        │
                                                        └─ pandabase-ops ─▶ pandabase-postgres:5432
 
-MCP 客户端 ──https──▶ auth.pandabase.top/api/server/built-in/dbx（Casdoor 登录 + 工具白名单）
+MCP 客户端 ──https──▶ auth.pandabase.top:8443/api/server/built-in/dbx（Casdoor 登录 + 工具白名单）
                           └─ pandabase-ops ─▶ pandabase-dbx:4224/mcp（Bearer token）
 ```
 
@@ -62,7 +62,7 @@ DBX Web 自带 Streamable HTTP MCP。它不直接暴露，只让 Casdoor 的 MCP
 | 上游端点 | `http://pandabase-dbx:4224/mcp` |
 | 上游 token | `deploy/dbx/.env` 的 `DBX_MCP_TOKEN` |
 | 上游 Host 白名单 | `pandabase-dbx:4224` |
-| 网关 URL | `https://auth.pandabase.top/api/server/built-in/dbx` |
+| 网关 URL | `https://auth.pandabase.top:8443/api/server/built-in/dbx` |
 | Casdoor 记录 | `built-in/dbx`，application `app-built-in` |
 | 权限 | 只读（`readOnly=true`、`allowDangerousSql=false`）；工具白名单 7 个 |
 | 连接白名单 | ⚠️ 实测指向 `pandabase`（用户 `pandabase_admin`，实例级超管），**不是**只读连接——见「五、安全边界」末条 |
@@ -71,12 +71,12 @@ DBX Web 自带 Streamable HTTP MCP。它不直接暴露，只让 Casdoor 的 MCP
 
 ```bash
 # Claude Code
-claude mcp add --transport http dbx https://auth.pandabase.top/api/server/built-in/dbx
+claude mcp add --transport http dbx https://auth.pandabase.top:8443/api/server/built-in/dbx
 ```
 
 ```json
 // Cursor（~/.cursor/mcp.json）或 VS Code（.vscode/mcp.json，type 写 http）
-{ "mcpServers": { "dbx": { "url": "https://auth.pandabase.top/api/server/built-in/dbx" } } }
+{ "mcpServers": { "dbx": { "url": "https://auth.pandabase.top:8443/api/server/built-in/dbx" } } }
 ```
 
 首次连接会跳 Casdoor 登录；用 `built-in` 组织的管理员账号。客户端通过
@@ -98,10 +98,10 @@ dbx_execute_query
 
 ```bash
 # 未登录应是 401，并带 protected-resource metadata
-curl -i -X POST https://auth.pandabase.top/api/server/built-in/dbx
+curl -i -X POST https://auth.pandabase.top:8443/api/server/built-in/dbx
 
 # 元数据
-curl -fsS https://auth.pandabase.top/.well-known/oauth-protected-resource/api/server/built-in/dbx
+curl -fsS https://auth.pandabase.top:8443/.well-known/oauth-protected-resource/api/server/built-in/dbx
 
 # 本机看 DBX 侧的 MCP 状态（需要 DBX 登录 cookie）
 curl -sS -b <cookie> http://127.0.0.1:8002/api/app-settings/mcp-http-status
@@ -145,7 +145,7 @@ docker compose -f deploy/dbx/docker-compose.yml logs --tail=50 dbx
 公网可达性验收（应该连不上）：
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' --max-time 5 https://dbx.pandabase.top/
+curl -s -o /dev/null -w '%{http_code}\n' --max-time 5 https://dbx.pandabase.top:8443/
 ```
 
 ## 五、安全边界

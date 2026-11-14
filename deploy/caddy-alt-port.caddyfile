@@ -1,0 +1,57 @@
+# 共享宿主机 · 非标端口入口（:8443）——对外的唯一入口。
+#
+# 为什么存在：pandabase.top 未备案，而机器在大陆。实测（2026-11-14）：
+#   80  → 302 到 https://dnspod.qcloud.com/static/webblock.html?d=<域名>（备案拦截页）
+#   443 → 收到 ClientHello 后直接 RST（客户端 openssl 报 unexpected eof while reading）
+#   8443 → 正常握手
+# 所以对外入口挪到 8443。背景与取舍见 docs/decisions/0005-alt-port-tls.md。
+#
+# 与 443 的关系：caddy-site.caddyfile 里 443 的站点块**保留不删**——服务器侧自测、
+# 以后备案下来要切回都用得上；客户端一律改用 8443。
+#
+# 证书：这里**不写 tls 指令**，直接用 Caddy 自己托管的同名 LE 证书
+# （/var/lib/caddy/.local/share/caddy/certificates/，2027-02-06 到期）。
+# 但 80/443 都拿不到 ACME 校验，Caddy 到期续不了——续期必须改成 DNS-01：
+#
+#   1. sudo ACME_EMAIL=... DP_Id=... DP_Key=... bash scripts/tls-wildcard.sh issue
+#   2. 把下面两个站点块的 tls 行打开（指向 /etc/caddy/certs/pandabase.top/）
+#   3. caddy validate && systemctl reload caddy
+#
+# 未完成第 1~3 步之前，2027-02-06 之后这两个站点会因证书过期整体不可用。
+#
+# 追加方式同 caddy-site.caddyfile：先备份、validate、再 reload。
+#
+#   sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak-$(date +%F)
+#   sudo tee -a /etc/caddy/Caddyfile < deploy/caddy-alt-port.caddyfile
+#   sudo caddy validate --config /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+
+# ---------------------------------------------------------------------------
+# 授权服务器。issuer 已按 ADR 0005 定为 https://auth.pandabase.top:8443。
+# ---------------------------------------------------------------------------
+auth.pandabase.top:8443 {
+	# tls /etc/caddy/certs/pandabase.top/fullchain.pem /etc/caddy/certs/pandabase.top/privkey.pem
+	encode zstd gzip
+	# 反代不做鉴权；不加缓冲，Streamable HTTP 的长连接直接穿透。
+	reverse_proxy 127.0.0.1:8001
+}
+
+# ---------------------------------------------------------------------------
+# 业务站点。每接一个业务复制这一段，改域名与上游端口，**端口一律 8443**。
+# 同一端口靠 SNI/Host 分流，所以安全组只需要额外放通 8443 一个口。
+# ---------------------------------------------------------------------------
+baiduads.pandabase.top:8443 {
+	# tls /etc/caddy/certs/pandabase.top/fullchain.pem /etc/caddy/certs/pandabase.top/privkey.pem
+
+	encode zstd gzip
+
+	# 探活不鉴权：容器 HEALTHCHECK、外部监控、排障都要能直接打到
+	handle /healthz {
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	handle {
+		# 反代不做鉴权：令牌校验在业务进程内完成（docs/edge.md 第三节）。
+		reverse_proxy 127.0.0.1:8000
+	}
+}

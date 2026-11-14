@@ -1,13 +1,17 @@
 # 身份（Casdoor）
 
-平台唯一的授权服务器：`https://auth.pandabase.top`。所有业务都是 OAuth 2.1 Resource Server，
+平台唯一的授权服务器：`https://auth.pandabase.top:8443`。所有业务都是 OAuth 2.1 Resource Server，
 只校验令牌、不签发令牌。
+
+> 端口 8443 不是随手挑的：域名未备案，443 上的 TLS 被中间设备按 SNI 重置，对外入口
+> 整体挪到 8443，见 [ADR 0005](decisions/0005-alt-port-tls.md)。**端口是 issuer 的一部分**，
+> 漏了端口会得到 `iss` 不匹配导致的 401。
 
 ## 一、不可变的东西
 
 | 项 | 值 | 为什么不能改 |
 |---|---|---|
-| issuer | `https://auth.pandabase.top` | 写进每个 JWT 的 `iss`；改一次 = 所有令牌失效 + 所有客户端重配 |
+| issuer | `https://auth.pandabase.top:8443` | 写进每个 JWT 的 `iss`；改一次 = 所有令牌失效 + 所有客户端重配（2026-11-14 已为绕备案拦截改过一次，见 ADR 0005） |
 | 授权服务器实例 | 同一个 Casdoor | 多实例意味着多套 issuer，业务要同时信任多个 |
 | DCR | 业务应用 `disabled`；built-in 组织 `public`（仅 Casdoor MCP 网关） | 见下 |
 | `client_id_metadata_document_supported` | 开启 built-in DCR 后为 `true` | MCP 客户端可用 URL 当 client_id；业务应用仍手工注册 |
@@ -27,9 +31,9 @@
 复核命令：
 
 ```bash
-curl -fsS https://auth.pandabase.top/.well-known/openid-configuration \
+curl -fsS https://auth.pandabase.top:8443/.well-known/openid-configuration \
   | python3 -m json.tool | grep -E 'issuer|jwks_uri|registration_endpoint|client_id_metadata'
-curl -fsS https://auth.pandabase.top/.well-known/jwks | head -c 200
+curl -fsS https://auth.pandabase.top:8443/.well-known/jwks | head -c 200
 ```
 
 > **built-in 组织的 `dcr_policy=public` 只为 Casdoor MCP 网关服务**（见 `docs/dbx.md`）。
@@ -40,7 +44,7 @@ curl -fsS https://auth.pandabase.top/.well-known/jwks | head -c 200
 
 | 应用 | client_id | grant_types | redirect_uris | 用途 |
 |---|---|---|---|---|
-| `mybmo-mcp` | `709a8e16656a223a1ab7` | `authorization_code` + `refresh_token` | `https://auth.pandabase.top/apps`、`http://127.0.0.1:33418/callback` | 业务专用（2026-11-08 建）；33418 是 `scripts/verify-oauth.py` 的本地回调 |
+| `mybmo-mcp` | `709a8e16656a223a1ab7` | `authorization_code` + `refresh_token` | `https://auth.pandabase.top:8443/apps`、`http://127.0.0.1:33418/callback` | 业务专用（2026-11-08 建）；33418 是 `scripts/verify-oauth.py` 的本地回调 |
 | `app-built-in` | `60fda1d9bedd4615eb90` | `authorization_code` + `refresh_token` | 空 | Casdoor 自带示例，**password grant 已于 2026-11-08 关闭**；已不在任何业务的白名单里 |
 | `dcr_*`（当前 3 个） | 客户端自助注册 | `authorization_code` + `refresh_token` | `http://localhost:<port>/oauth/callback` | MCP 客户端经 built-in DCR 注册（见 ADR 0004）；需定期清理 |
 
@@ -51,8 +55,9 @@ client_secret 在 Casdoor 控制台 `Applications → mybmo-mcp` 里查看，不
 > 固定回调填进去（例：`https://claude.ai/api/mcp/auth_callback`），一个客户端一个 URI。
 > 填完不需要重启 Casdoor，重新发起登录即可。
 >
-> `mybmo-mcp` 的 `https://auth.pandabase.top/apps` 是建应用时 UI 带上的 Casdoor 自身路径，
-> 与业务无关，确认没用后可删（授权码流程实际走 33418 回调）。
+> `mybmo-mcp` 的 `https://auth.pandabase.top:8443/apps` 是建应用时 UI 带上的 Casdoor 自身路径，
+> 与业务无关，确认没用后可删（授权码流程实际走 33418 回调）。加端口那次必须同步改它，
+> 否则 Casdoor 自己那几条跳转会把用户带回 443。
 
 ## 四、新增一个业务（一业务一 application）
 
@@ -85,9 +90,13 @@ client_secret 在 Casdoor 控制台 `Applications → mybmo-mcp` 里查看，不
 → 换 token → 解 `aud`/`scope` → 带令牌调一次 `/mcp`。`/mcp` 返回 400/406 表示身份已通过
 （MCP 握手拒绝空 body），401 才是没通过。
 
-**本机到 `*.pandabase.top` 的 443 被中间设备掐断时**（症状：`curl` 返回 000、
-Python 抛 `SSL: UNEXPECTED_EOF_WHILE_READING`，而同域名的浏览器能开、服务器侧 curl 200），
-把脚本放到服务器跑，用 SSH 隧道把浏览器回调接回来：
+**先确认你用的是 8443。** 443 在大陆机器上会被备案拦截按 SNI 直接 RST（ADR 0005），
+脚本默认 `--issuer` 已经是 `https://auth.pandabase.top:8443`。
+
+**若 8443 也被掐**（症状：`curl` 返回 000、Python 抛 `SSL: UNEXPECTED_EOF_WHILE_READING`，
+而同域名的浏览器能开、服务器侧 curl 200），说明拦截规则升级了，别换端口——
+转境外 VPS 回源（ADR 0005「重新评估条件」）。临时可用把脚本放到服务器跑、
+用 SSH 隧道接回浏览器回调的办法：
 
 ```bash
 # 本机：转发回调端口

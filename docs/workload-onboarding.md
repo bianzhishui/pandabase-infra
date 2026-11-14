@@ -51,7 +51,11 @@ networks:
 
 ## 五、边缘
 
-把域名对应的站点块加进宿主 Caddy（见 `docs/edge.md`），`curl -fsS https://<域名>/healthz` 得 200。
+把域名对应的站点块加进宿主 Caddy（见 `docs/edge.md`），端口用 **8443**，
+`curl -fsS https://<域名>:8443/healthz` 得 200。
+
+业务侧的 `RESOURCE_URL` 也要带端口（`https://<域名>:8443`），否则令牌的 `aud`/资源地址对不上，
+表现为 401——见 `docs/contract.md` 与 ADR 0005。
 
 ## 六、备份与监控登记
 
@@ -64,4 +68,4 @@ networks:
 
 | 业务 | 域名 | 端口 | 库/角色 | client_id | 卷 | 接入日期 |
 |---|---|---|---|---|---|---|
-| `mybmo-mcp` | `baiduads.pandabase.top` | 8000 | 暂无（用文件式 `tenancy.json`） | `709a8e16656a223a1ab7`（应用 `mybmo-mcp`；redirect_uris `http://127.0.0.1:33418/callback`） | `mybmo_data` | 2026-11-08 |
+| `mybmo-mcp` | `baiduads.pandabase.top`（对外 `:8443`） | 8000 | 暂无（用文件式 `tenancy.json`） | `709a8e16656a223a1ab7`（应用 `mybmo-mcp`；redirect_uris `http://127.0.0.1:33418/callback`） | `mybmo_data` | 2026-11-08 |

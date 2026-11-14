@@ -1,4 +1,8 @@
-# 共享宿主机用的站点配置片段。
+# 共享宿主机用的站点配置片段（443）。
+#
+# ⚠️ 大陆未备案的机器上 443 会被按 SNI RST，对外入口实际是 deploy/caddy-alt-port.caddyfile
+#    里的 :8443 站点块（见 docs/decisions/0005-alt-port-tls.md）。本文件的 443 站点块保留，
+#    用于服务器侧自测与备案后切回，客户端不要指向它。
 #
 # 适用场景：这台机器上已有 Caddy（systemd）在服务别的站点，不能把 80/443 让给容器。
 # 做法：把下面的块追加到 /etc/caddy/Caddyfile，validate 后 reload。

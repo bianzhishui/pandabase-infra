@@ -218,11 +218,14 @@ def main() -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="验证 Casdoor 授权码流程与 /mcp 鉴权")
-    parser.add_argument("--issuer", default="https://auth.pandabase.top")
+    parser.add_argument("--issuer",
+                        default=os.environ.get("CASDOOR_ISSUER", "https://auth.pandabase.top:8443"))
     parser.add_argument("--client-id", default=os.environ.get("CASDOOR_CLIENT_ID", ""))
     parser.add_argument("--redirect-uri", default="http://127.0.0.1:33418/callback")
     parser.add_argument("--scope", default="openid baidu:read")
-    parser.add_argument("--mcp-url", default="https://baiduads.pandabase.top/mcp")
+    parser.add_argument("--mcp-url",
+                        default=os.environ.get("MYBMO_RESOURCE_URL",
+                                              "https://baiduads.pandabase.top:8443") + "/mcp")
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--print-url", action="store_true")
     parser.add_argument("--timeout", type=int, default=TIMEOUT_SECONDS)

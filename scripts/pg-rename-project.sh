@@ -233,6 +233,8 @@ umask 077
 {
     echo "POSTGRES_USER=casdoor_app"
     printf 'POSTGRES_PASSWORD=%s\n' "$CASDOOR_PASS"
+    # 2026-11-14 起对外入口是 8443（ADR 0005）；本脚本是 11-08 改名迁移的一次性脚本，
+    # 里面的 URL 一律保持当时的样子，不要再拿它当「当前值」抄
     echo "CASDOOR_ORIGIN=${CASDOOR_ORIGIN:-https://auth.pandabase.top}"
 } > "$CD_ENV"
 chmod 600 "$CD_ENV"
