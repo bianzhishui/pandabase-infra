@@ -124,3 +124,31 @@ bash scripts/pg-backup.sh
 - [ ] 通配证书的续期结果纳入监控（续期失败时不会有人知道，直到握手报错）
 - [ ] 备份加 cron 与异地留存
 - [ ] `/healthz` 外部监控（当前只有容器 HEALTHCHECK）
+
+## 七、代码怎么上线（这台机器拉不到 GitHub）
+
+`/opt/pandabase-infra` 是仓库的 checkout，但**服务器直连 GitHub 会失败**
+（`gnutls_handshake() failed: The TLS connection was non-properly terminated`），
+所以它停在 2026-11-09 很久。部署路径因此是"从开发机推过去"，不是从服务器拉：
+
+```bash
+# 开发机：一次性配置（已配好）
+git remote add deploy pandabase-dev01:/opt/pandabase-infra
+
+# 之后每次上线：一条命令，直接更新服务器上的工作区
+git push origin main      # 备份到 GitHub
+git push deploy main      # 落到服务器 checkout
+```
+
+服务器那份 checkout 已设 `receive.denyCurrentBranch=updateInstead`，所以 push 会**同时更新
+工作区文件**（工作区有本地改动时 push 会被拒，先处理掉再推）。
+
+注意**仓库不等于线上运行态**。infra 里只有 Caddy 站点片段、compose、脚本；真正生效的是：
+
+| 运行态 | 位置 | 由谁维护 |
+|---|---|---|
+| Caddy 站点 | `/etc/caddy/Caddyfile`（repo 里只是片段，需手工追加 + reload） | 人 |
+| 容器环境变量 | `deploy/*/.env`（gitignore，不在仓库里） | 人 |
+| 业务环境变量 | `/opt/mybmo-mcp/deploy/.env`（另一个仓库） | 业务仓库 |
+
+所以「部署」= `git push deploy main` + 需要时手工 reload。没有 CI/CD，这是刻意的（见 ADR 0001）。
